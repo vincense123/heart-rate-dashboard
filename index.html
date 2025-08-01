@@ -5,16 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Medical Heart Rate Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     /* Global styling */
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
       padding: 0;
       background: linear-gradient(-45deg, #74ABE2, #5563DE, #6DD5FA, #2980B9);
       background-size: 400% 400%;
       animation: gradientMove 12s ease infinite;
       color: white;
+      overflow-x: hidden;
     }
 
     /* Background gradient animation */
@@ -32,90 +34,334 @@
       letter-spacing: 1px;
       font-weight: bold;
       border-bottom: 2px solid rgba(255,255,255,0.3);
+      position: relative;
+    }
+
+    /* Connection Status */
+    .connection-status {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.7em;
+      background: rgba(0,0,0,0.3);
+      padding: 8px 12px;
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .status-connected { background-color: #00ff88; }
+    .status-connecting { background-color: #ffaa00; }
+    .status-error { background-color: #ff4444; }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    /* Export Controls */
+    .export-controls {
+      position: absolute;
+      top: 15px;
+      left: 20px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .export-btn {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.7em;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .export-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: translateY(-2px);
     }
 
     .dashboard {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 20px;
       padding: 20px;
     }
 
     .card {
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 15px;
-      padding: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      padding: 25px;
       color: #333;
       text-align: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      transform: scale(0.95);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.2);
+      transform: translateY(50px);
       opacity: 0;
-      animation: fadeIn 0.8s ease forwards;
+      animation: slideUp 0.8s ease forwards;
+      position: relative;
+      overflow: hidden;
     }
 
-    @keyframes fadeIn {
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      transition: left 0.5s;
+    }
+
+    .card:hover::before {
+      left: 100%;
+    }
+
+    @keyframes slideUp {
       to {
         opacity: 1;
-        transform: scale(1);
+        transform: translateY(0);
       }
     }
 
-    .value {
-      font-size: 2.5em;
-      margin: 10px 0;
-      transition: transform 0.3s ease;
+    .card:nth-child(1) { animation-delay: 0.1s; }
+    .card:nth-child(2) { animation-delay: 0.2s; }
+    .card:nth-child(3) { animation-delay: 0.3s; }
+    .card:nth-child(4) { animation-delay: 0.4s; }
+
+    .card h3 {
+      margin-top: 0;
+      color: #2c3e50;
+      font-size: 1.1em;
+      margin-bottom: 15px;
     }
 
-    /* Pulse animation for heart rate value */
+    .value {
+      font-size: 2.8em;
+      margin: 15px 0;
+      transition: all 0.3s ease;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Enhanced pulse animation */
     .pulse {
       animation: pulseEffect 0.8s ease;
     }
 
     @keyframes pulseEffect {
       0% { transform: scale(1); color: #333; }
-      50% { transform: scale(1.2); color: red; }
+      50% { transform: scale(1.15); color: #e74c3c; text-shadow: 0 0 20px rgba(231,76,60,0.5); }
       100% { transform: scale(1); color: #333; }
     }
 
-    /* Alerts with glow effect */
-    .alert {
-      padding: 10px;
-      border-radius: 5px;
-      margin-top: 10px;
-      font-weight: bold;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      transition: all 0.3s ease;
+    /* Loading animation */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
     }
-    .normal { background-color: #d4edda; color: #155724; }
-    .high { background-color: #f8d7da; color: #721c24; box-shadow: 0 0 10px rgba(255,0,0,0.7); }
-    .low { background-color: #fff3cd; color: #856404; box-shadow: 0 0 10px rgba(255,165,0,0.7); }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Enhanced alerts */
+    .alert {
+      padding: 12px;
+      border-radius: 10px;
+      margin-top: 15px;
+      font-weight: bold;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+      border-left: 4px solid;
+    }
+
+    .normal { 
+      background-color: #d4edda; 
+      color: #155724; 
+      border-left-color: #28a745;
+    }
+    
+    .high { 
+      background-color: #f8d7da; 
+      color: #721c24; 
+      border-left-color: #dc3545;
+      animation: glow 2s infinite;
+    }
+    
+    .low { 
+      background-color: #fff3cd; 
+      color: #856404; 
+      border-left-color: #ffc107;
+      animation: glow 2s infinite;
+    }
+
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border-left-color: #dc3545;
+    }
+
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+      50% { box-shadow: 0 4px 25px rgba(220,53,69,0.4); }
+    }
+
+    /* Statistics card */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .stat-item {
+      background: rgba(52,152,219,0.1);
+      padding: 15px;
+      border-radius: 10px;
+      border-left: 3px solid #3498db;
+    }
+
+    .stat-value {
+      font-size: 1.5em;
+      font-weight: bold;
+      color: #2980b9;
+    }
+
+    .stat-label {
+      font-size: 0.9em;
+      color: #7f8c8d;
+      margin-top: 5px;
+    }
+
+    /* Floating particles animation */
+    .particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 50%;
+      animation: float 6s infinite linear;
+    }
+
+    @keyframes float {
+      0% {
+        transform: translateY(100vh) rotate(0deg);
+        opacity: 0;
+      }
+      10% {
+        opacity: 1;
+      }
+      90% {
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-100px) rotate(360deg);
+        opacity: 0;
+      }
+    }
   </style>
 </head>
 <body>
-  <header>Medical Heart Rate Dashboard</header>
+  <div class="particles"></div>
+  
+  <header>
+    Medical Heart Rate Dashboard
+    <div class="export-controls">
+      <button class="export-btn" onclick="exportToPDF()">📄 Export PDF</button>
+      <button class="export-btn" onclick="exportToExcel()">📊 Export Excel</button>
+    </div>
+    <div class="connection-status">
+      <div id="statusIndicator" class="status-indicator status-connecting"></div>
+      <span id="connectionText">Connecting...</span>
+    </div>
+  </header>
   
   <div class="dashboard">
     <!-- Current Heart Rate -->
     <div class="card">
-      <h3>Current Heart Rate</h3>
+      <h3>💓 Current Heart Rate</h3>
       <div id="heartRate" class="value">-- bpm</div>
-      <div id="status" class="alert normal">Waiting for data...</div>
+      <div id="status" class="alert normal">
+        <div class="loading"></div>
+        Initializing device...
+      </div>
     </div>
 
     <!-- Average Heart Rate -->
     <div class="card">
-      <h3>Average Heart Rate</h3>
+      <h3>📈 Average Heart Rate</h3>
       <div id="avgHeartRate" class="value">-- bpm</div>
+      <div id="lastUpdate" style="font-size: 0.8em; color: #7f8c8d; margin-top: 10px;">
+        Last updated: --
+      </div>
     </div>
 
     <!-- Heart Rate Chart -->
     <div class="card">
-      <h3>Heart Rate Trend</h3>
+      <h3>📊 Heart Rate Trend</h3>
       <canvas id="heartRateChart"></canvas>
+    </div>
+
+    <!-- Statistics -->
+    <div class="card">
+      <h3>📋 Session Statistics</h3>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div id="maxHR" class="stat-value">--</div>
+          <div class="stat-label">Max HR</div>
+        </div>
+        <div class="stat-item">
+          <div id="minHR" class="stat-value">--</div>
+          <div class="stat-label">Min HR</div>
+        </div>
+        <div class="stat-item">
+          <div id="sessionTime" class="stat-value">0:00</div>
+          <div class="stat-label">Session Time</div>
+        </div>
+        <div class="stat-item">
+          <div id="dataPoints" class="stat-value">0</div>
+          <div class="stat-label">Data Points</div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
+    // Chart setup
     const ctx = document.getElementById('heartRateChart').getContext('2d');
     const heartRateChart = new Chart(ctx, {
       type: 'line',
@@ -124,62 +370,283 @@
         datasets: [{
           label: 'Heart Rate (bpm)',
           data: [],
-          borderColor: 'red',
-          backgroundColor: 'rgba(255, 0, 0, 0.2)',
+          borderColor: '#e74c3c',
+          backgroundColor: 'rgba(231, 76, 60, 0.1)',
           fill: true,
-          tension: 0.3
+          tension: 0.4,
+          borderWidth: 3,
+          pointBackgroundColor: '#e74c3c',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6
         }]
       },
       options: {
         responsive: true,
         plugins: {
-          legend: { labels: { color: '#333' } }
+          legend: { 
+            labels: { color: '#333' },
+            display: false
+          }
         },
         scales: {
-          x: { title: { display: true, text: 'Time', color: '#333' } },
-          y: { title: { display: true, text: 'BPM', color: '#333' }, min: 40, max: 160 }
+          x: { 
+            title: { display: true, text: 'Time', color: '#333' },
+            grid: { color: 'rgba(0,0,0,0.1)' },
+            ticks: { color: '#666' }
+          },
+          y: { 
+            title: { display: true, text: 'BPM', color: '#333' }, 
+            min: 40, 
+            max: 160,
+            grid: { color: 'rgba(0,0,0,0.1)' },
+            ticks: { color: '#666' }
+          }
+        },
+        animation: {
+          duration: 1000,
+          easing: 'easeInOutQuart'
         }
       }
     });
 
+    // Data storage
     let heartRates = [];
+    let timestamps = [];
+    let sessionStartTime = new Date();
+    let connectionStatus = 'connecting';
+    let errorCount = 0;
 
-    function updateDashboard() {
-      const hr = Math.floor(Math.random() * 50) + 50; // 50–100 bpm
-      const now = new Date().toLocaleTimeString();
-      heartRates.push(hr);
-      if (heartRates.length > 20) heartRates.shift();
-
-      const heartRateElem = document.getElementById("heartRate");
-      heartRateElem.innerText = hr + " bpm";
-      heartRateElem.classList.add("pulse");
-      setTimeout(() => heartRateElem.classList.remove("pulse"), 800);
-
-      const statusElement = document.getElementById("status");
-      if (hr > 100) {
-        statusElement.innerText = "High Heart Rate!";
-        statusElement.className = "alert high";
-      } else if (hr < 60) {
-        statusElement.innerText = "Low Heart Rate!";
-        statusElement.className = "alert low";
-      } else {
-        statusElement.innerText = "Normal";
-        statusElement.className = "alert normal";
+    // Create floating particles
+    function createParticles() {
+      const particles = document.querySelector('.particles');
+      for (let i = 0; i < 20; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 6 + 's';
+        particle.style.animationDuration = (6 + Math.random() * 4) + 's';
+        particles.appendChild(particle);
       }
-
-      const avg = (heartRates.reduce((a, b) => a + b, 0) / heartRates.length).toFixed(1);
-      document.getElementById("avgHeartRate").innerText = avg + " bpm";
-
-      heartRateChart.data.labels.push(now);
-      heartRateChart.data.datasets[0].data.push(hr);
-      if (heartRateChart.data.labels.length > 20) {
-        heartRateChart.data.labels.shift();
-        heartRateChart.data.datasets[0].data.shift();
-      }
-      heartRateChart.update();
     }
 
-    setInterval(updateDashboard, 2000);
+    // Update connection status
+    function updateConnectionStatus(status, message) {
+      const indicator = document.getElementById('statusIndicator');
+      const text = document.getElementById('connectionText');
+      
+      indicator.className = `status-indicator status-${status}`;
+      text.textContent = message;
+      connectionStatus = status;
+    }
+
+    // Simulate device connection
+    function initializeConnection() {
+      setTimeout(() => {
+        updateConnectionStatus('connecting', 'Pairing device...');
+      }, 1000);
+      
+      setTimeout(() => {
+        updateConnectionStatus('connecting', 'Calibrating sensors...');
+      }, 2500);
+      
+      setTimeout(() => {
+        updateConnectionStatus('connected', 'Device Connected');
+        document.getElementById('status').innerHTML = 'Device ready - collecting data...';
+        document.querySelector('.loading').style.display = 'none';
+        startDataCollection();
+      }, 4000);
+    }
+
+    // Start collecting data
+    function startDataCollection() {
+      setInterval(updateDashboard, 2000);
+      setInterval(updateSessionTime, 1000);
+    }
+
+    // Simulate data fetching with error handling
+    function fetchHeartRateData() {
+      return new Promise((resolve, reject) => {
+        // Simulate network delay
+        setTimeout(() => {
+          // Simulate occasional errors (5% chance)
+          if (Math.random() < 0.05) {
+            reject(new Error('Sensor connection lost'));
+            return;
+          }
+          
+          // Generate realistic heart rate data
+          const baseHR = 70;
+          const variation = Math.sin(Date.now() / 10000) * 15; // Slow oscillation
+          const noise = (Math.random() - 0.5) * 10; // Random noise
+          const hr = Math.max(45, Math.min(150, Math.round(baseHR + variation + noise)));
+          
+          resolve(hr);
+        }, 100 + Math.random() * 300);
+      });
+    }
+
+    // Update dashboard with error handling
+    async function updateDashboard() {
+      try {
+        const hr = await fetchHeartRateData();
+        errorCount = 0; // Reset error count on success
+        
+        const now = new Date();
+        const timeString = now.toLocaleTimeString();
+        
+        heartRates.push(hr);
+        timestamps.push(now);
+        
+        // Keep only last 20 readings
+        if (heartRates.length > 20) {
+          heartRates.shift();
+          timestamps.shift();
+        }
+
+        // Update current heart rate with pulse animation
+        const heartRateElem = document.getElementById("heartRate");
+        heartRateElem.innerText = hr + " bpm";
+        heartRateElem.classList.add("pulse");
+        setTimeout(() => heartRateElem.classList.remove("pulse"), 800);
+
+        // Update status with enhanced alerts
+        const statusElement = document.getElementById("status");
+        if (hr > 100) {
+          statusElement.innerHTML = "⚠️ High Heart Rate Alert!";
+          statusElement.className = "alert high";
+        } else if (hr < 60) {
+          statusElement.innerHTML = "⚠️ Low Heart Rate Alert!";
+          statusElement.className = "alert low";
+        } else {
+          statusElement.innerHTML = "✅ Normal Range";
+          statusElement.className = "alert normal";
+        }
+
+        // Update average
+        const avg = (heartRates.reduce((a, b) => a + b, 0) / heartRates.length).toFixed(1);
+        document.getElementById("avgHeartRate").innerText = avg + " bpm";
+        document.getElementById("lastUpdate").innerText = "Last updated: " + timeString;
+
+        // Update statistics
+        updateStatistics();
+
+        // Update chart
+        heartRateChart.data.labels.push(timeString);
+        heartRateChart.data.datasets[0].data.push(hr);
+        if (heartRateChart.data.labels.length > 20) {
+          heartRateChart.data.labels.shift();
+          heartRateChart.data.datasets[0].data.shift();
+        }
+        heartRateChart.update('none'); // Smooth update
+
+        // Ensure connected status
+        if (connectionStatus !== 'connected') {
+          updateConnectionStatus('connected', 'Device Connected');
+        }
+
+      } catch (error) {
+        console.error('Data fetch error:', error);
+        errorCount++;
+        
+        const statusElement = document.getElementById("status");
+        statusElement.innerHTML = `❌ ${error.message}`;
+        statusElement.className = "alert error";
+        
+        if (errorCount >= 3) {
+          updateConnectionStatus('error', 'Connection Lost');
+        } else {
+          updateConnectionStatus('connecting', 'Reconnecting...');
+        }
+      }
+    }
+
+    // Update session statistics
+    function updateStatistics() {
+      if (heartRates.length === 0) return;
+      
+      const maxHR = Math.max(...heartRates);
+      const minHR = Math.min(...heartRates);
+      
+      document.getElementById('maxHR').textContent = maxHR + ' bpm';
+      document.getElementById('minHR').textContent = minHR + ' bpm';
+      document.getElementById('dataPoints').textContent = heartRates.length;
+    }
+
+    // Update session time
+    function updateSessionTime() {
+      const elapsed = Math.floor((new Date() - sessionStartTime) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      document.getElementById('sessionTime').textContent = 
+        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    // Export to PDF
+    function exportToPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(20);
+      doc.text('Heart Rate Report', 20, 20);
+      
+      // Add session info
+      doc.setFontSize(12);
+      doc.text(`Session Date: ${new Date().toLocaleDateString()}`, 20, 40);
+      doc.text(`Session Duration: ${document.getElementById('sessionTime').textContent}`, 20, 50);
+      doc.text(`Data Points: ${heartRates.length}`, 20, 60);
+      
+      if (heartRates.length > 0) {
+        doc.text(`Average HR: ${document.getElementById('avgHeartRate').textContent}`, 20, 70);
+        doc.text(`Max HR: ${document.getElementById('maxHR').textContent}`, 20, 80);
+        doc.text(`Min HR: ${document.getElementById('minHR').textContent}`, 20, 90);
+        
+        // Add data table
+        doc.text('Heart Rate Data:', 20, 110);
+        let y = 120;
+        heartRates.forEach((hr, index) => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(`${timestamps[index].toLocaleTimeString()}: ${hr} bpm`, 20, y);
+          y += 10;
+        });
+      }
+      
+      doc.save('heart-rate-report.pdf');
+    }
+
+    // Export to Excel (CSV format)
+    function exportToExcel() {
+      if (heartRates.length === 0) {
+        alert('No data to export');
+        return;
+      }
+      
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Timestamp,Heart Rate (BPM)\n";
+      
+      heartRates.forEach((hr, index) => {
+        csvContent += `${timestamps[index].toLocaleString()},${hr}\n`;
+      });
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "heart-rate-data.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Initialize everything
+    document.addEventListener('DOMContentLoaded', () => {
+      createParticles();
+      initializeConnection();
+    });
   </script>
 </body>
 </html>
