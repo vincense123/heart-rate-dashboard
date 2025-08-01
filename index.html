@@ -6,45 +6,89 @@
   <title>Medical Heart Rate Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    /* Global styling */
     body {
       font-family: Arial, sans-serif;
-      background-color: #f4f6f8;
       margin: 0;
       padding: 0;
-    }
-    header {
-      background-color: #007BFF;
+      background: linear-gradient(-45deg, #74ABE2, #5563DE, #6DD5FA, #2980B9);
+      background-size: 400% 400%;
+      animation: gradientMove 12s ease infinite;
       color: white;
+    }
+
+    /* Background gradient animation */
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    header {
+      background-color: rgba(0, 0, 0, 0.4);
       padding: 15px;
       text-align: center;
-      font-size: 1.5em;
+      font-size: 1.8em;
+      letter-spacing: 1px;
+      font-weight: bold;
+      border-bottom: 2px solid rgba(255,255,255,0.3);
     }
+
     .dashboard {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 20px;
       padding: 20px;
     }
+
     .card {
-      background: white;
-      border-radius: 10px;
-      padding: 15px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      text-align: center;
-    }
-    .value {
-      font-size: 2em;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 15px;
+      padding: 20px;
       color: #333;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transform: scale(0.95);
+      opacity: 0;
+      animation: fadeIn 0.8s ease forwards;
     }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .value {
+      font-size: 2.5em;
+      margin: 10px 0;
+      transition: transform 0.3s ease;
+    }
+
+    /* Pulse animation for heart rate value */
+    .pulse {
+      animation: pulseEffect 0.8s ease;
+    }
+
+    @keyframes pulseEffect {
+      0% { transform: scale(1); color: #333; }
+      50% { transform: scale(1.2); color: red; }
+      100% { transform: scale(1); color: #333; }
+    }
+
+    /* Alerts with glow effect */
     .alert {
       padding: 10px;
       border-radius: 5px;
       margin-top: 10px;
       font-weight: bold;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
     }
     .normal { background-color: #d4edda; color: #155724; }
-    .high { background-color: #f8d7da; color: #721c24; }
-    .low { background-color: #fff3cd; color: #856404; }
+    .high { background-color: #f8d7da; color: #721c24; box-shadow: 0 0 10px rgba(255,0,0,0.7); }
+    .low { background-color: #fff3cd; color: #856404; box-shadow: 0 0 10px rgba(255,165,0,0.7); }
   </style>
 </head>
 <body>
@@ -72,7 +116,6 @@
   </div>
 
   <script>
-    // Chart.js initialization
     const ctx = document.getElementById('heartRateChart').getContext('2d');
     const heartRateChart = new Chart(ctx, {
       type: 'line',
@@ -82,35 +125,36 @@
           label: 'Heart Rate (bpm)',
           data: [],
           borderColor: 'red',
-          fill: false,
-          tension: 0.1
+          backgroundColor: 'rgba(255, 0, 0, 0.2)',
+          fill: true,
+          tension: 0.3
         }]
       },
       options: {
         responsive: true,
+        plugins: {
+          legend: { labels: { color: '#333' } }
+        },
         scales: {
-          x: { title: { display: true, text: 'Time' } },
-          y: { title: { display: true, text: 'BPM' }, min: 40, max: 160 }
+          x: { title: { display: true, text: 'Time', color: '#333' } },
+          y: { title: { display: true, text: 'BPM', color: '#333' }, min: 40, max: 160 }
         }
       }
     });
 
-    // Data storage for average calculation
     let heartRates = [];
 
     function updateDashboard() {
-      // Simulated heart rate
       const hr = Math.floor(Math.random() * 50) + 50; // 50–100 bpm
       const now = new Date().toLocaleTimeString();
-
-      // Add to array
       heartRates.push(hr);
-      if (heartRates.length > 20) heartRates.shift(); // Keep last 20 readings
+      if (heartRates.length > 20) heartRates.shift();
 
-      // Update Current HR
-      document.getElementById("heartRate").innerText = hr + " bpm";
+      const heartRateElem = document.getElementById("heartRate");
+      heartRateElem.innerText = hr + " bpm";
+      heartRateElem.classList.add("pulse");
+      setTimeout(() => heartRateElem.classList.remove("pulse"), 800);
 
-      // Update Status
       const statusElement = document.getElementById("status");
       if (hr > 100) {
         statusElement.innerText = "High Heart Rate!";
@@ -123,14 +167,11 @@
         statusElement.className = "alert normal";
       }
 
-      // Update Average
       const avg = (heartRates.reduce((a, b) => a + b, 0) / heartRates.length).toFixed(1);
       document.getElementById("avgHeartRate").innerText = avg + " bpm";
 
-      // Update chart
       heartRateChart.data.labels.push(now);
       heartRateChart.data.datasets[0].data.push(hr);
-
       if (heartRateChart.data.labels.length > 20) {
         heartRateChart.data.labels.shift();
         heartRateChart.data.datasets[0].data.shift();
@@ -138,7 +179,7 @@
       heartRateChart.update();
     }
 
-    setInterval(updateDashboard, 2000); // Update every 2 sec
+    setInterval(updateDashboard, 2000);
   </script>
 </body>
 </html>
