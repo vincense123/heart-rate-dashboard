@@ -25,6 +25,15 @@ MIN_PEAK_DISTANCE = int(
     SAMPLE_RATE * 60 / MAX_HEART_RATE
 )
 
+# Beats with a prominence below this fraction of the median beat
+# prominence are rejected (dicrotic / diastolic bumps, small artifacts).
+PROMINENCE_KEEP_FRACTION = 0.5
+
+# The device IR signal falls when blood volume rises, so the pulse
+# points down in the raw data. Analysis uses the flipped signal so the
+# systolic peak points up. The Raw IR graph keeps the original.
+POLARITY = -1.0
+
 
 # ============================================================
 # FILTER
@@ -282,17 +291,19 @@ def detect_pulses(
             prominence=prominence,
         )
 
-        if len(peaks) >= 3:
-            typical = np.median(
-                properties["prominences"]
-            )
+    # A real beat is not much smaller than the typical beat: drop any
+    # peak whose prominence is below 50% of the median beat prominence.
+    if len(peaks) >= 3:
+        typical = np.median(
+            properties["prominences"]
+        )
 
-            keep = (
-                properties["prominences"]
-                >= 0.4 * typical
-            )
+        keep = (
+            properties["prominences"]
+            >= PROMINENCE_KEEP_FRACTION * typical
+        )
 
-            peaks = peaks[keep]
+        peaks = peaks[keep]
 
     edge = int(
         fs * 0.5
@@ -313,7 +324,16 @@ def calculate_quality(
     signal,
     peaks,
     fs=SAMPLE_RATE,
+    noise_signal=None,
 ):
+    """
+    signal        band-pass filtered PPG (interval / amplitude / coverage)
+    noise_signal  DC-removed PPG BEFORE the band-pass filter. Noise must
+                  be measured here: the 0.5-8 Hz band-pass removes almost
+                  all high-frequency noise, so on the filtered signal the
+                  noise score is always 100%. Defaults to `signal` only
+                  for callers that have nothing else.
+    """
     result = {
         "score": 0.0,
         "classification": "Poor",
@@ -487,9 +507,15 @@ def calculate_quality(
     # NOISE
     # --------------------------------------------------------
 
-    if len(signal) >= 11:
+    noise_input = (
+        signal
+        if noise_signal is None
+        else np.asarray(noise_signal, dtype=float)
+    )
+
+    if len(noise_input) >= 11:
         smooth = (
-            pd.Series(signal)
+            pd.Series(noise_input)
             .rolling(
                 window=11,
                 center=True,
@@ -500,11 +526,11 @@ def calculate_quality(
         )
 
         residual = (
-            signal - smooth
+            noise_input - smooth
         )
 
         signal_std = np.std(
-            signal
+            noise_input
         )
 
         noise_ratio = (
@@ -616,38 +642,34 @@ def extract_ppg(reading):
 # COMPLETE READING ANALYSIS
 # ============================================================
 
-def analyze_reading(reading):
-    raw = extract_ppg(
-        reading
-    )
+def analyze_samples(raw):
+    """Full pipeline on a raw sample array (used by the app and tests)."""
+    raw = np.asarray(raw, dtype=float)
 
     if len(raw) == 0:
         return None
 
-    samples = np.arange(
-        len(raw)
-    )
+    samples = np.arange(len(raw))
 
-    dc_removed, baseline = (
-        remove_dc(raw)
-    )
+    # Flip so the pulse points up; the original stays in "Raw IR".
+    oriented = POLARITY * raw
 
-    filtered = bandpass_filter(
-        dc_removed
-    )
+    dc_removed, baseline = remove_dc(oriented)
 
-    peaks = detect_pulses(
-        filtered
-    )
+    filtered = bandpass_filter(dc_removed)
+
+    peaks = detect_pulses(filtered)
 
     quality = calculate_quality(
         filtered,
         peaks,
+        noise_signal=dc_removed,
     )
 
     waveform = pd.DataFrame({
         "Sample Number": samples,
         "Raw IR": raw,
+        "Raw IR (flipped)": oriented,
         "Baseline": baseline,
         "DC Removed PPG": dc_removed,
         "Filtered PPG": filtered,
@@ -662,3 +684,11 @@ def analyze_reading(reading):
         "peaks": peaks,
         "quality": quality,
     }
+
+
+def analyze_reading(reading):
+    return analyze_samples(
+        extract_ppg(
+            reading
+        )
+    )

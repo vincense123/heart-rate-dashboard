@@ -75,46 +75,87 @@ def extract_timing_features(peaks, sampling_rate=500):
     return result
 
 
+def _foot_between(signal, lo, hi):
+    """Index of the minimum of signal[lo:hi + 1] (the pulse foot)."""
+    lo = max(0, int(lo))
+    hi = min(len(signal) - 1, int(hi))
+
+    if hi <= lo:
+        return lo
+
+    return lo + int(np.argmin(signal[lo:hi + 1]))
+
+
 def extract_pulse_features(filtered_ppg, peaks, sampling_rate=500):
-    """Extract morphology features from each detected pulse."""
+    """
+    Extract morphology features from each detected pulse.
+
+    The foot of a pulse is the minimum of the signal between two
+    neighbouring peaks. For beat k:
+
+        rise time = foot before the peak  -> peak
+        fall time = peak -> foot after the peak
+        width     = foot before -> foot after
+
+    The foot before the FIRST peak and the foot after the LAST peak
+    have no neighbouring peak, so they are searched within one median
+    beat interval of that peak (and never outside the recording).
+    """
     signal = _clean(filtered_ppg)
     peaks = np.asarray(peaks, dtype=int)
 
-    if len(signal) == 0 or len(peaks) == 0:
+    if len(signal) == 0 or len(peaks) < 2:
         return pd.DataFrame()
 
     peaks = np.unique(peaks[(peaks >= 0) & (peaks < len(signal))])
+
+    if len(peaks) < 2:
+        return pd.DataFrame()
+
+    median_interval = int(round(np.median(np.diff(peaks))))
+
+    # feet[k] is the foot before beat k; feet[k + 1] the foot after it.
+    feet = [
+        _foot_between(signal, peaks[0] - median_interval, peaks[0])
+    ]
+
+    for previous, current in zip(peaks[:-1], peaks[1:]):
+        feet.append(_foot_between(signal, previous, current))
+
+    feet.append(
+        _foot_between(signal, peaks[-1], peaks[-1] + median_interval)
+    )
+
     rows = []
 
     for i, peak in enumerate(peaks):
-        start = 0 if i == 0 else int((peaks[i - 1] + peak) / 2)
-        end = len(signal) - 1 if i == len(peaks) - 1 else int((peak + peaks[i + 1]) / 2)
+        start = feet[i]
+        end = feet[i + 1]
 
-        if end <= start:
+        if not (start < peak < end):
             continue
 
-        segment = signal[start:end + 1]
-        baseline = float(np.min(segment))
+        baseline = float(signal[start])
         amplitude = float(signal[peak] - baseline)
 
-        rise_s = max(1, peak - start) / sampling_rate
-        fall_s = max(1, end - peak) / sampling_rate
+        rise_s = (peak - start) / sampling_rate
+        fall_s = (end - peak) / sampling_rate
         width_s = (end - start) / sampling_rate
 
-        corrected = np.maximum(segment - baseline, 0)
+        corrected = np.maximum(signal[start:end + 1] - baseline, 0)
         area = float(_trapz(corrected, dx=1.0 / sampling_rate))
 
         rows.append({
             "Pulse": i + 1,
-            "Start Sample": start,
+            "Start Sample": int(start),
             "Peak Sample": int(peak),
-            "End Sample": end,
+            "End Sample": int(end),
             "Amplitude": amplitude,
             "Pulse Width (s)": width_s,
             "Rise Time (s)": rise_s,
             "Fall Time (s)": fall_s,
-            "Rise Slope": amplitude / rise_s if rise_s else np.nan,
-            "Fall Slope": amplitude / fall_s if fall_s else np.nan,
+            "Rise Slope": amplitude / rise_s,
+            "Fall Slope": amplitude / fall_s,
             "Pulse Area": area,
         })
 

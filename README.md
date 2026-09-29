@@ -15,3 +15,9 @@ locally and never uploaded. Source lives in `web/`; rebuild with `python3 web/bu
 `python -m pytest tests -q` (synthetic signals with known heart rates; set `PPG_SAMPLE_XLSX` to also
 compare against the device heart rate in a real workbook).
 `legacy_simulated_index.html` is the earlier simulated-data page, kept for reference.
+
+## Note (Phase 0)
+The Streamlit code (`streamlit_app/`) now flips the raw IR so the pulse points up, rejects beats below 50% of
+the median beat prominence, scores noise before the band-pass filter, and measures rise/fall from pulse feet.
+The browser dashboard (`index.html`, `web/ppg_core.js`) has NOT been updated to match yet, so its numbers differ
+from Streamlit until it is ported. Project rules and data facts are in `CLAUDE.md`.

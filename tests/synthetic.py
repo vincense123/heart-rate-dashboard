@@ -52,9 +52,18 @@ def make_ppg(
     scale=2000.0,
     seed=0,
     seconds=N / FS,
+    device_polarity=True,
+    return_info=False,
 ):
     """
-    Return (samples, true_hr).
+    Return (samples, true_hr), or (samples, true_hr, info) when
+    return_info is True (info["systolic"] = sample index of each true
+    systolic peak).
+
+    device_polarity  the real VinCense IR signal FALLS when blood volume
+                     rises, so the pulse points down in the raw data.
+                     True (default) reproduces that; the "sawtooth"
+                     template is already in device polarity.
 
     hr      true mean heart rate in BPM
     noise   white-noise std relative to pulse amplitude
@@ -64,6 +73,11 @@ def make_ppg(
     rng = np.random.default_rng(seed)
     n = int(round(seconds * FS))
     signal = np.zeros(n)
+
+    # Fraction of a beat at which the systolic peak sits (after the
+    # analysis flips the device signal so the pulse points up).
+    peak_fraction = {"notch": 0.18, "strong_notch": 0.16, "sawtooth": 0.76}[kind]
+    systolic = []
 
     period = 60.0 / hr
     t_beat = rng.uniform(0, period)
@@ -83,6 +97,10 @@ def make_ppg(
         first = int(round(start * FS))
         beat = _beat_template(kind, m) * (1 + 0.05 * rng.standard_normal())
 
+        peak_index = first + int(round(peak_fraction * m))
+        if 0 <= peak_index < n:
+            systolic.append(peak_index)
+
         lo, hi = max(first, 0), min(first + m, n)
         if hi > lo:
             signal[lo:hi] += beat[lo - first:hi - first]
@@ -92,10 +110,16 @@ def make_ppg(
     signal += 0.5 * wander * np.sin(2 * np.pi * 0.07 * time + rng.uniform(0, 6.28))
     signal += noise * rng.standard_normal(n)
 
+    if device_polarity and kind != "sawtooth":
+        signal = -signal
+
     samples = np.round(dc + scale * signal)
 
     # True rate, from the beat times that fall inside the recording.
     inside = np.array([b for b in beat_times if 0 <= b < seconds])
     true_hr = 60.0 / np.mean(np.diff(inside)) if len(inside) > 2 else hr
+
+    if return_info:
+        return samples, true_hr, {"systolic": np.array(systolic, dtype=int)}
 
     return samples, true_hr

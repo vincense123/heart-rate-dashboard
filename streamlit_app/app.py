@@ -8,6 +8,7 @@ from ppg_features import extract_all_features
 from bp_research import build_bp_feature_dataset, correlation_table
 
 from filters import apply_filters
+from selection import get_selected_reading
 
 from pdf_export import (
     create_pdf,
@@ -272,12 +273,13 @@ if uploaded_file:
         )
 
 
-        # Look the reading up by its position in the filtered table.
-        # (Matching on Timestamp alone could open a different
-        # patient's reading if two rows ever share a timestamp.)
-        reading = filtered_df.iloc[
-            row_number
-        ]
+        # Select by original row id (never by Timestamp: two rows can
+        # share one).
+        row_id, reading = get_selected_reading(
+            df,
+            filtered_df,
+            row_number,
+        )
 
         selected_timestamp = reading.get(
             "Timestamp"

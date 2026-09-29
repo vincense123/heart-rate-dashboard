@@ -22,11 +22,9 @@ from synthetic import make_ppg  # noqa: E402
 
 
 def analyse(samples):
-    raw = np.asarray(samples, float)
-    dc, _ = pa.remove_dc(raw)
-    filtered = pa.bandpass_filter(dc)
-    peaks = pa.detect_pulses(filtered)
-    return pa.calculate_quality(filtered, peaks), peaks
+    """Run the real pipeline (flip, DC removal, filter, pulses, quality)."""
+    result = pa.analyze_samples(samples)
+    return result["quality"], result["peaks"]
 
 
 @pytest.mark.parametrize("kind", ["notch", "strong_notch", "sawtooth"])
