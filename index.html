@@ -1,0 +1,1583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{color-scheme:light}
+body{margin:0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<title>VinCense PPG Waveform Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column, in the order of the original Streamlit app
+   (upload, filters, readings table, selected reading sections 1-7). */
+:root {
+  --bg: #eef2f4;
+  --surface: #ffffff;
+  --surface-2: #f5f8f9;
+  --ink: #12222b;
+  --ink-2: #4a5d68;
+  --ink-3: #6b7d87;
+  --line: #d5dee3;
+  --grid: #e6ecef;
+  --accent: #0a7a74;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcf0ee;
+  --trace: #0a7a74;
+  --pulse: #d4470f;
+  --good: #17703f;
+  --good-bg: #dcf3e4;
+  --warn: #8a5a00;
+  --warn-bg: #fbecc8;
+  --bad: #a5271a;
+  --bad-bg: #fbdcd7;
+  --info-bg: #e3eef6;
+  --sel: #d3ecea;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d181e; --surface: #142229; --surface-2: #192a32; --ink: #e5eef1; --ink-2: #a5b8c1;
+    --ink-3: #8195a0; --line: #2a3d47; --grid: #223440; --accent: #41c9bf; --accent-ink: #062321;
+    --accent-soft: #163c3b; --trace: #41c9bf; --pulse: #ff8a4c; --good: #6fd69a; --good-bg: #163a27;
+    --warn: #f0c060; --warn-bg: #3d3010; --bad: #ff9a8c; --bad-bg: #421c17; --info-bg: #1a3040; --sel: #1b4342;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d181e; --surface: #142229; --surface-2: #192a32; --ink: #e5eef1; --ink-2: #a5b8c1;
+  --ink-3: #8195a0; --line: #2a3d47; --grid: #223440; --accent: #41c9bf; --accent-ink: #062321;
+  --accent-soft: #163c3b; --trace: #41c9bf; --pulse: #ff8a4c; --good: #6fd69a; --good-bg: #163a27;
+  --warn: #f0c060; --warn-bg: #3d3010; --bad: #ff9a8c; --bad-bg: #421c17; --info-bg: #1a3040; --sel: #1b4342;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.5; }
+.app { max-width: 1240px; margin-inline: auto; padding-inline: 16px; padding-block: 20px 56px; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 1.15rem; margin: 0; font-weight: 600; text-wrap: balance; }
+h3 { font-size: 0.95rem; margin: 0; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--ink-2); }
+.small { font-size: 0.85rem; }
+.mono, td.num, .metric .v { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.top { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; align-items: end; }
+.top .sub { color: var(--ink-2); max-width: 62ch; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.grow { flex: 1 1 200px; min-width: 0; }
+
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--ink-2); font-weight: 500; }
+select, .btn {
+  font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; min-height: 38px;
+}
+select { width: 100%; }
+.btn { cursor: pointer; background: var(--surface-2); font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: 0.55; cursor: progress; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: var(--surface-2); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+
+.notice { border-radius: 6px; padding: 10px 12px; font-size: 0.88rem; }
+.notice.info { background: var(--info-bg); }
+.notice.good { background: var(--good-bg); color: var(--good); }
+.notice.warn { background: var(--warn-bg); color: var(--warn); }
+.notice.bad { background: var(--bad-bg); color: var(--bad); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.good { background: var(--good-bg); color: var(--good); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.pill.none { background: var(--surface-2); color: var(--ink-3); }
+
+.tablewrap { overflow: auto; border: 1px solid var(--line); border-radius: 6px; max-height: 400px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface-2); color: var(--ink-2); font-weight: 600; font-size: 0.78rem; z-index: 1; }
+td.num, th.num { text-align: right; }
+#readings tbody tr { cursor: pointer; }
+#readings tbody tr:hover { background: var(--surface-2); }
+#readings tbody tr[aria-selected=true] { background: var(--sel); }
+#readings tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tablewrap.static { max-height: none; }
+.kv td:first-child { color: var(--ink-2); width: 40%; }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.metric { background: var(--surface-2); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.metric .l { font-size: 0.78rem; color: var(--ink-2); }
+.metric .v { font-size: 1.35rem; font-weight: 500; overflow-wrap: anywhere; }
+.metric .v small { font-size: 0.75rem; color: var(--ink-2); font-weight: 400; }
+.metric.hero .v { font-size: 1.8rem; }
+
+.chart { width: 100%; height: 360px; }
+.charthead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; }
+.legend { display: flex; gap: 14px; font-size: 0.8rem; color: var(--ink-2); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details > summary { cursor: pointer; padding: 10px 12px; font-weight: 600; font-size: 0.9rem; }
+details > .inner { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 12px; }
+.section { display: flex; flex-direction: column; gap: 14px; }
+.sectionhead { display: flex; flex-direction: column; gap: 2px; }
+hr { border: 0; border-top: 1px solid var(--line); width: 100%; margin: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.bar { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.cell-pass { color: var(--good); font-weight: 600; }
+.cell-fail { color: var(--bad); font-weight: 600; }
+@media (max-width: 560px) { h1 { font-size: 1.3rem; } .chart { height: 300px; } }
+@media (prefers-reduced-motion: no-preference) { .bar > i { transition: width .3s; } }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-basic-dist-min@2.35.2/plotly-basic.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<main class="app">
+  <header class="top">
+    <div>
+      <h1>VinCense PPG Waveform Analyzer</h1>
+      <p class="sub small">Inspect raw PPG, filtered waveforms, detected pulses, signal quality and pulse features. Research and engineering use only, not a medical device.</p>
+    </div>
+    <span id="sourcePill" class="pill none">No data</span>
+  </header>
+
+  <section class="panel" aria-labelledby="uploadTitle">
+    <h2 id="uploadTitle">Upload VinCense Excel File</h2>
+    <div class="drop" id="drop">
+      <div>
+        <div><strong id="fileName">Example data (computer-generated)</strong></div>
+        <div class="small muted" id="fileHint">Drop an .xlsx file here or choose one. The file is read in your browser and is never uploaded.</div>
+      </div>
+      <div class="row">
+        <label class="btn primary" for="file" id="fileBtn" tabindex="0">Choose Excel file</label>
+        <input type="file" id="file" accept=".xlsx,.xlsm" aria-label="Upload VinCense Excel file">
+        <button class="btn" id="demoBtn" type="button">Use example data</button>
+      </div>
+    </div>
+    <label class="field" id="sheetField" hidden>Select Data Sheet
+      <select id="sheet"></select>
+    </label>
+    <div id="loadMsg" class="notice info" role="status">Showing example data: 12 computer-generated PPG signals with a known heart rate in the HeartRate column. Choose your own workbook to analyse real readings.</div>
+  </section>
+
+  <section class="panel" aria-labelledby="filterTitle">
+    <h2 id="filterTitle">Filters</h2>
+    <div class="row">
+      <label class="field grow">Select Patient ID<select id="fId"></select></label>
+      <label class="field grow">Select Patient Name<select id="fName"></select></label>
+      <label class="field grow">Select Date<select id="fDate"></select></label>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="readingsTitle">
+    <div class="charthead">
+      <h2 id="readingsTitle">Available Readings : <span id="count" class="mono">0</span></h2>
+      <span class="small muted">Click a row to open that reading.</span>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnAll" type="button">Export ALL PPG Analysis PDF</button>
+      <button class="btn" id="btnView" type="button">Export CURRENT VIEW – Raw + DC + Filtered</button>
+    </div>
+    <p class="small muted">ALL PDF = every filtered reading with its filtered waveform and a final summary. CURRENT VIEW PDF = every visible reading with raw, DC-removed and filtered waveforms. For a single-reading report, select a row and use the export button at the bottom of that reading.</p>
+    <div id="exportMsg" class="notice info" role="status" hidden></div>
+    <div id="agree" class="notice info" role="status"></div>
+    <div class="tablewrap"><table id="readings"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <div id="reading"></div>
+
+  <section class="panel" aria-labelledby="labTitle">
+    <h2 id="labTitle">Accuracy check with synthetic signals</h2>
+    <p class="small muted">Generates 15-second, 500 Hz test signals with a known heart rate from 40 to 180 BPM, three pulse shapes, with and without added noise and baseline drift, and compares what this analyzer measures with the true rate. A result counts as correct when it is within 2.5 BPM.</p>
+    <div class="actions"><button class="btn primary" id="labBtn" type="button">Run synthetic test</button></div>
+    <div id="labOut"></div>
+  </section>
+</main>
+
+<script>
+/*
+ * VinCense PPG analysis core (browser + Node).
+ * Port of streamlit_app/ppg_analysis.py and ppg_features.py.
+ * Research/engineering use only.
+ */
+(function (root) {
+  "use strict";
+
+  const SAMPLE_RATE = 500;
+  const LOW_CUTOFF = 0.5;
+  const HIGH_CUTOFF = 8.0;
+  const FILTER_ORDER = 4;
+  const MIN_HEART_RATE = 40;
+  const MAX_HEART_RATE = 180;
+  const MIN_PEAK_DISTANCE = Math.floor((SAMPLE_RATE * 60) / MAX_HEART_RATE); // 166
+
+  // 4th-order Butterworth band-pass 0.5-8 Hz at 500 Hz, as second-order
+  // sections (scipy.signal.butter(..., output="sos")) and the matching
+  // steady-state values (scipy.signal.sosfilt_zi).
+  const SOS = [
+    [4.372688797820071e-06, 8.745377595640141e-06, 4.372688797820071e-06, 1.0, -1.843281077034628, 0.850729784704957],
+    [1.0, 2.0, 1.0, 1.0, -1.9250646864028191, 0.9345460910125841],
+    [1.0, -2.0, 1.0, 1.0, -1.987361748985374, 0.987410987372232],
+    [1.0, -2.0, 1.0, 1.0, -1.9956047086893063, 0.995645292613521],
+  ];
+  const ZI = [
+    [0.0023437870142540692, -0.001993276709832369],
+    [0.9882897466820506, -0.9234486233180359],
+    [-0.9906379063833222, 0.9906379063833446],
+    [0.0, 0.0],
+  ];
+
+  // ---------------------------------------------------------------- helpers
+
+  function sortedCopy(a) {
+    const c = Float64Array.from(a);
+    c.sort();
+    return c;
+  }
+
+  function median(a) {
+    if (!a.length) return NaN;
+    const s = sortedCopy(a);
+    const m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  function mean(a) {
+    if (!a.length) return NaN;
+    let t = 0;
+    for (let i = 0; i < a.length; i++) t += a[i];
+    return t / a.length;
+  }
+
+  function std(a, ddof) {
+    ddof = ddof || 0;
+    if (a.length - ddof <= 0) return NaN;
+    const m = mean(a);
+    let t = 0;
+    for (let i = 0; i < a.length; i++) t += (a[i] - m) * (a[i] - m);
+    return Math.sqrt(t / (a.length - ddof));
+  }
+
+  // numpy.percentile, linear interpolation
+  function percentile(a, q) {
+    const s = sortedCopy(a);
+    const idx = ((s.length - 1) * q) / 100;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return s[lo] + (s[hi] - s[lo]) * (idx - lo);
+  }
+
+  function finite(a) {
+    const out = [];
+    for (let i = 0; i < a.length; i++) if (Number.isFinite(a[i])) out.push(a[i]);
+    return out;
+  }
+
+  // ----------------------------------------------------------------- filter
+
+  function sosfilt(x, scale) {
+    const y = Float64Array.from(x);
+    for (let s = 0; s < SOS.length; s++) {
+      const b0 = SOS[s][0], b1 = SOS[s][1], b2 = SOS[s][2];
+      const a1 = SOS[s][4], a2 = SOS[s][5];
+      let z0 = ZI[s][0] * scale, z1 = ZI[s][1] * scale;
+      for (let n = 0; n < y.length; n++) {
+        const xn = y[n];
+        const yn = b0 * xn + z0;
+        z0 = b1 * xn - a1 * yn + z1;
+        z1 = b2 * xn - a2 * yn;
+        y[n] = yn;
+      }
+    }
+    return y;
+  }
+
+  // scipy.signal.sosfiltfilt (odd padding, steady-state initial conditions)
+  function bandpassFilter(signal) {
+    const x = Float64Array.from(signal);
+    const n = x.length;
+    if (n < 20) return x;
+    const padlen = 3 * (2 * SOS.length + 1);
+    if (n <= padlen) return x;
+
+    const ext = new Float64Array(n + 2 * padlen);
+    for (let i = 0; i < padlen; i++) ext[i] = 2 * x[0] - x[padlen - i];
+    ext.set(x, padlen);
+    for (let i = 0; i < padlen; i++) ext[padlen + n + i] = 2 * x[n - 1] - x[n - 2 - i];
+
+    let y = sosfilt(ext, ext[0]);
+    y.reverse();
+    y = sosfilt(y, y[0]);
+    y.reverse();
+    return y.slice(padlen, padlen + n);
+  }
+
+  // centred rolling median, min_periods = 1 (pandas), window up to 201
+  function removeDC(signal) {
+    const x = Float64Array.from(signal);
+    const n = x.length;
+    const window = Math.min(201, n % 2 ? n : n - 1);
+    const baseline = new Float64Array(n);
+
+    if (window >= 3) {
+      // Sliding sorted window: O(n * window) memmoves instead of n sorts.
+      const half = (window - 1) >> 1;
+      const buf = new Float64Array(window);
+      let size = 0;
+      const insert = (v) => {
+        let lo = 0, hi = size;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (buf[mid] < v) lo = mid + 1; else hi = mid; }
+        buf.copyWithin(lo + 1, lo, size);
+        buf[lo] = v;
+        size++;
+      };
+      const remove = (v) => {
+        let lo = 0, hi = size;
+        while (lo < hi) { const mid = (lo + hi) >> 1; if (buf[mid] < v) lo = mid + 1; else hi = mid; }
+        buf.copyWithin(lo, lo + 1, size);
+        size--;
+      };
+      for (let k = 0; k <= Math.min(half, n - 1); k++) insert(x[k]);
+      for (let i = 0; i < n; i++) {
+        baseline[i] = size % 2 ? buf[size >> 1] : (buf[(size >> 1) - 1] + buf[size >> 1]) / 2;
+        if (i - half >= 0) remove(x[i - half]);
+        if (i + half + 1 < n) insert(x[i + half + 1]);
+      }
+    } else {
+      baseline.fill(median(x));
+    }
+
+    const dc = new Float64Array(n);
+    for (let i = 0; i < n; i++) dc[i] = x[i] - baseline[i];
+    return { dcRemoved: dc, baseline };
+  }
+
+  function normalizeSignal(signal) {
+    const n = signal.length;
+    const med = median(signal);
+    const dev = new Float64Array(n);
+    for (let i = 0; i < n; i++) dev[i] = Math.abs(signal[i] - med);
+    const mad = median(dev);
+    const out = new Float64Array(n);
+    if (mad < 1e-9) {
+      const s = std(signal, 0);
+      if (s < 1e-9) return out;
+      for (let i = 0; i < n; i++) out[i] = (signal[i] - med) / s;
+      return out;
+    }
+    for (let i = 0; i < n; i++) out[i] = (signal[i] - med) / (1.4826 * mad);
+    return out;
+  }
+
+  // ------------------------------------------------------------- find_peaks
+
+  function localMaxima(x) {
+    const peaks = [];
+    let i = 1;
+    const imax = x.length - 1;
+    while (i < imax) {
+      if (x[i - 1] < x[i]) {
+        let ahead = i + 1;
+        while (ahead < imax && x[ahead] === x[i]) ahead++;
+        if (x[ahead] < x[i]) {
+          peaks.push((i + ahead - 1) >> 1);
+          i = ahead;
+        } else i++;
+      } else i++;
+    }
+    return peaks;
+  }
+
+  function prominenceOf(x, peak) {
+    let leftMin = x[peak];
+    for (let i = peak; i >= 0 && x[i] <= x[peak]; i--) if (x[i] < leftMin) leftMin = x[i];
+    let rightMin = x[peak];
+    for (let i = peak; i < x.length && x[i] <= x[peak]; i++) if (x[i] < rightMin) rightMin = x[i];
+    return x[peak] - Math.max(leftMin, rightMin);
+  }
+
+  // scipy.signal.find_peaks with distance and prominence (same order:
+  // distance first, then prominence)
+  function findPeaks(x, opts) {
+    opts = opts || {};
+    let peaks = localMaxima(x);
+
+    if (opts.distance != null && peaks.length > 1) {
+      const dist = Math.ceil(opts.distance);
+      const keep = new Uint8Array(peaks.length).fill(1);
+      const order = peaks.map((_, k) => k).sort((a, b) => x[peaks[a]] - x[peaks[b]]);
+      for (let o = order.length - 1; o >= 0; o--) {
+        const j = order[o];
+        if (!keep[j]) continue;
+        let k = j - 1;
+        while (k >= 0 && peaks[j] - peaks[k] < dist) { keep[k] = 0; k--; }
+        k = j + 1;
+        while (k < peaks.length && peaks[k] - peaks[j] < dist) { keep[k] = 0; k++; }
+      }
+      peaks = peaks.filter((_, k) => keep[k]);
+    }
+
+    let prominences = peaks.map((p) => prominenceOf(x, p));
+    if (opts.prominence != null) {
+      const sel = prominences.map((v) => v >= opts.prominence);
+      peaks = peaks.filter((_, k) => sel[k]);
+      prominences = prominences.filter((_, k) => sel[k]);
+    }
+    return { peaks, prominences };
+  }
+
+  // -------------------------------------------------------- pulse detection
+
+  function estimatePulsePeriod(signal, fs) {
+    fs = fs || SAMPLE_RATE;
+    let x = Float64Array.from(signal);
+    const edge = Math.floor(fs * 0.5);
+    if (x.length > 4 * edge) x = x.slice(edge, x.length - edge);
+
+    const low = percentile(x, 2), high = percentile(x, 98);
+    for (let i = 0; i < x.length; i++) x[i] = Math.min(Math.max(x[i], low), high);
+    const m = mean(x);
+    for (let i = 0; i < x.length; i++) x[i] -= m;
+    const n = x.length;
+
+    const lagMin = Math.floor((fs * 60) / (MAX_HEART_RATE + 20));
+    const lagMax = Math.min(Math.floor((fs * 60) / (MIN_HEART_RATE - 5)), n >> 1);
+    if (n < 4 * lagMin || lagMax <= lagMin + 2) return null;
+
+    let acf0 = 0;
+    for (let i = 0; i < n; i++) acf0 += x[i] * x[i];
+    if (acf0 <= 0) return null;
+
+    const win = new Float64Array(lagMax - lagMin + 1);
+    for (let lag = lagMin; lag <= lagMax; lag++) {
+      let t = 0;
+      for (let i = 0; i + lag < n; i++) t += x[i] * x[i + lag];
+      win[lag - lagMin] = (t / acf0) * (n / (n - lag));
+    }
+
+    const cand = localMaxima(win);
+    if (!cand.length) return null;
+    let strongest = -Infinity;
+    for (const c of cand) if (win[c] > strongest) strongest = win[c];
+    if (strongest < 0.25) return null;
+
+    let chosen = cand[0];
+    for (const c of cand) {
+      if (win[c] >= 0.85 * strongest) { chosen = c; break; }
+    }
+    return (chosen + lagMin) / fs;
+  }
+
+  function detectPulses(signal, fs) {
+    fs = fs || SAMPLE_RATE;
+    const normalized = normalizeSignal(signal);
+    if (normalized.length < 100) return [];
+
+    const amplitude = percentile(normalized, 90) - percentile(normalized, 10);
+    if (amplitude < 0.05) return [];
+    const prominence = Math.max(0.15, amplitude * 0.10);
+
+    let res = findPeaks(normalized, { distance: MIN_PEAK_DISTANCE, prominence });
+    let peaks = res.peaks;
+
+    // Second pass: keep one peak per real pulse period and drop the small
+    // secondary (dicrotic / diastolic) bumps that inflate the rate.
+    const period = estimatePulsePeriod(signal, fs);
+    if (period !== null && peaks.length >= 3) {
+      const distance = Math.max(Math.floor(0.2 * fs), Math.floor(0.6 * period * fs));
+      res = findPeaks(normalized, { distance, prominence });
+      peaks = res.peaks;
+      if (peaks.length >= 3) {
+        const typical = median(res.prominences);
+        peaks = peaks.filter((_, k) => res.prominences[k] >= 0.4 * typical);
+      }
+    }
+
+    const edge = Math.floor(fs * 0.5);
+    return peaks.filter((p) => p >= edge && p < signal.length - edge);
+  }
+
+  // ---------------------------------------------------------------- quality
+
+  function calculateQuality(signal, peaks, fs) {
+    fs = fs || SAMPLE_RATE;
+    const result = {
+      score: 0, classification: "Poor", peak_count: peaks.length,
+      interval_score: 0, amplitude_score: 0, noise_score: 0, coverage_score: 0,
+      heart_rate: null, median_interval: null, interval_cv: null,
+    };
+    if (signal.length < 100) return result;
+
+    const duration = signal.length / fs;
+    const expectedMin = (duration * MIN_HEART_RATE) / 60;
+    const expectedMax = (duration * MAX_HEART_RATE) / 60;
+
+    let coverage = 0;
+    if (peaks.length >= 3) {
+      coverage = Math.min(100, (peaks.length / Math.max(expectedMin, 1)) * 100);
+      if (peaks.length > expectedMax * 1.25) coverage *= 0.5;
+    }
+
+    let intervalScore = 0;
+    if (peaks.length >= 3) {
+      const iv = [];
+      for (let i = 1; i < peaks.length; i++) iv.push((peaks[i] - peaks[i - 1]) / fs);
+      const medIv = median(iv);
+      const cv = medIv > 0 ? std(iv, 0) / medIv : 1;
+      const hr = medIv > 0 ? 60 / medIv : null;
+      result.median_interval = medIv;
+      result.interval_cv = cv;
+      result.heart_rate = hr;
+
+      intervalScore = cv <= 0.03 ? 100 : cv <= 0.05 ? 90 : cv <= 0.08 ? 75 : cv <= 0.12 ? 55 : cv <= 0.18 ? 30 : 10;
+      if (hr !== null && !(hr >= MIN_HEART_RATE && hr <= MAX_HEART_RATE)) intervalScore *= 0.4;
+    }
+
+    let amplitudeScore = 0;
+    if (peaks.length >= 3) {
+      const amps = [];
+      for (let i = 0; i < peaks.length - 1; i++) {
+        const seg = signal.subarray ? signal.subarray(peaks[i], peaks[i + 1]) : signal.slice(peaks[i], peaks[i + 1]);
+        if (seg.length > 5) {
+          let mx = -Infinity, mn = Infinity;
+          for (let k = 0; k < seg.length; k++) { if (seg[k] > mx) mx = seg[k]; if (seg[k] < mn) mn = seg[k]; }
+          amps.push(mx - mn);
+        }
+      }
+      if (amps.length >= 2) {
+        const medAmp = median(amps);
+        const cv = medAmp > 0 ? std(amps, 0) / medAmp : 1;
+        amplitudeScore = cv <= 0.10 ? 100 : cv <= 0.20 ? 85 : cv <= 0.30 ? 70 : cv <= 0.45 ? 50 : cv <= 0.60 ? 30 : 10;
+      }
+    }
+
+    let noiseScore = 0;
+    if (signal.length >= 11) {
+      const n = signal.length;
+      const residual = new Float64Array(n);
+      for (let i = 0; i < n; i++) {
+        const lo = Math.max(0, i - 5), hi = Math.min(n - 1, i + 5);
+        let t = 0;
+        for (let k = lo; k <= hi; k++) t += signal[k];
+        residual[i] = signal[i] - t / (hi - lo + 1);
+      }
+      const sStd = std(signal, 0);
+      const ratio = sStd > 1e-9 ? std(residual, 0) / sStd : 1;
+      noiseScore = ratio <= 0.03 ? 100 : ratio <= 0.05 ? 90 : ratio <= 0.08 ? 75 : ratio <= 0.12 ? 55 : ratio <= 0.20 ? 30 : 10;
+    }
+
+    const score = Math.min(100, Math.max(0,
+      intervalScore * 0.35 + amplitudeScore * 0.25 + noiseScore * 0.25 + coverage * 0.15));
+    result.score = score;
+    result.classification = score >= 80 ? "Good" : score >= 60 ? "Acceptable" : "Poor";
+    result.interval_score = intervalScore;
+    result.amplitude_score = amplitudeScore;
+    result.noise_score = noiseScore;
+    result.coverage_score = Math.min(coverage, 100);
+    return result;
+  }
+
+  // ----------------------------------------------------------- reading input
+
+  const CYCLE_COLUMNS = [
+    "PPGValue cycle 1 (0-1500)",
+    "PPGValue cycle 2 (1501-3000)",
+    "PPGValue cycle 3 (3001-4500)",
+    "PPGValue cycle 4 (4501-6000)",
+    "PPGValue cycle 5 (6001-7500)",
+  ];
+
+  function extractPPG(reading) {
+    if (reading && reading._ppg) return Float64Array.from(reading._ppg);
+    const out = [];
+    for (const col of CYCLE_COLUMNS) {
+      const cell = reading[col];
+      if (cell === undefined || cell === null || cell === "") continue;
+      const parts = String(cell).split(",");
+      for (const p of parts) {
+        const v = parseFloat(p.trim());
+        if (Number.isFinite(v) && p.trim() !== "") out.push(v);
+      }
+    }
+    return Float64Array.from(out.slice(0, 7500));
+  }
+
+  function analyzeSamples(raw) {
+    if (!raw.length) return null;
+    const { dcRemoved, baseline } = removeDC(raw);
+    const filtered = bandpassFilter(dcRemoved);
+    const peaks = detectPulses(filtered);
+    const quality = calculateQuality(filtered, peaks);
+    return { raw, baseline, dcRemoved, filtered, peaks, quality };
+  }
+
+  function analyzeReading(reading) {
+    return analyzeSamples(extractPPG(reading));
+  }
+
+  // ---------------------------------------------------------------- features
+
+  function cv(a) {
+    const x = finite(a);
+    if (x.length < 2 || Math.abs(mean(x)) < 1e-12) return NaN;
+    return (std(x, 1) / Math.abs(mean(x))) * 100;
+  }
+  const smean = (a) => { const x = finite(a); return x.length ? mean(x) : NaN; };
+  const sstd = (a) => { const x = finite(a); return x.length > 1 ? std(x, 1) : NaN; };
+
+  function timingFeatures(peaks, fs) {
+    fs = fs || SAMPLE_RATE;
+    const r = {
+      "Detected Pulses": peaks.length, "Mean IBI (s)": NaN, "IBI SD (s)": NaN, "IBI CV (%)": NaN,
+      "Mean HR (BPM)": NaN, "Median HR (BPM)": NaN, "HR SD (BPM)": NaN, "HR CV (%)": NaN,
+    };
+    if (peaks.length < 2) return r;
+    const ibi = [];
+    for (let i = 1; i < peaks.length; i++) {
+      const d = (peaks[i] - peaks[i - 1]) / fs;
+      if (d > 0) ibi.push(d);
+    }
+    if (!ibi.length) return r;
+    const hr = ibi.map((d) => 60 / d).filter((h) => h >= 30 && h <= 220);
+    r["Mean IBI (s)"] = smean(ibi);
+    r["IBI SD (s)"] = sstd(ibi);
+    r["IBI CV (%)"] = cv(ibi);
+    r["Mean HR (BPM)"] = smean(hr);
+    r["Median HR (BPM)"] = hr.length ? median(hr) : NaN;
+    r["HR SD (BPM)"] = sstd(hr);
+    r["HR CV (%)"] = cv(hr);
+    return r;
+  }
+
+  function pulseFeatures(filtered, peaksIn, fs) {
+    fs = fs || SAMPLE_RATE;
+    const sig = filtered;
+    const peaks = Array.from(new Set(peaksIn.filter((p) => p >= 0 && p < sig.length))).sort((a, b) => a - b);
+    const rows = [];
+    for (let i = 0; i < peaks.length; i++) {
+      const peak = peaks[i];
+      const start = i === 0 ? 0 : Math.floor((peaks[i - 1] + peak) / 2);
+      const end = i === peaks.length - 1 ? sig.length - 1 : Math.floor((peak + peaks[i + 1]) / 2);
+      if (end <= start) continue;
+
+      let baseline = Infinity;
+      for (let k = start; k <= end; k++) if (sig[k] < baseline) baseline = sig[k];
+      const amplitude = sig[peak] - baseline;
+      const rise = Math.max(1, peak - start) / fs;
+      const fall = Math.max(1, end - peak) / fs;
+      const width = (end - start) / fs;
+
+      let area = 0;
+      let prev = Math.max(sig[start] - baseline, 0);
+      for (let k = start + 1; k <= end; k++) {
+        const cur = Math.max(sig[k] - baseline, 0);
+        area += ((prev + cur) / 2) / fs;
+        prev = cur;
+      }
+      rows.push({
+        "Pulse": i + 1, "Start Sample": start, "Peak Sample": peak, "End Sample": end,
+        "Amplitude": amplitude, "Pulse Width (s)": width, "Rise Time (s)": rise, "Fall Time (s)": fall,
+        "Rise Slope": amplitude / rise, "Fall Slope": amplitude / fall, "Pulse Area": area,
+      });
+    }
+    return rows;
+  }
+
+  function summarizePulses(rows) {
+    const col = (k) => rows.map((r) => r[k]);
+    if (!rows.length) {
+      return {
+        "Pulses Analysed": 0, "Mean Amplitude": NaN, "Amplitude SD": NaN, "Amplitude CV (%)": NaN,
+        "Mean Pulse Width (s)": NaN, "Pulse Width SD (s)": NaN, "Mean Rise Time (s)": NaN,
+        "Mean Fall Time (s)": NaN, "Mean Rise Slope": NaN, "Mean Fall Slope": NaN,
+        "Mean Pulse Area": NaN, "Pulse Area CV (%)": NaN,
+      };
+    }
+    return {
+      "Pulses Analysed": rows.length,
+      "Mean Amplitude": smean(col("Amplitude")), "Amplitude SD": sstd(col("Amplitude")),
+      "Amplitude CV (%)": cv(col("Amplitude")),
+      "Mean Pulse Width (s)": smean(col("Pulse Width (s)")), "Pulse Width SD (s)": sstd(col("Pulse Width (s)")),
+      "Mean Rise Time (s)": smean(col("Rise Time (s)")), "Mean Fall Time (s)": smean(col("Fall Time (s)")),
+      "Mean Rise Slope": smean(col("Rise Slope")), "Mean Fall Slope": smean(col("Fall Slope")),
+      "Mean Pulse Area": smean(col("Pulse Area")), "Pulse Area CV (%)": cv(col("Pulse Area")),
+    };
+  }
+
+  function waveformFeatures(filtered, fs) {
+    fs = fs || SAMPLE_RATE;
+    const x = finite(filtered);
+    if (!x.length) return {};
+    let mn = Infinity, mx = -Infinity, sq = 0;
+    for (const v of x) { if (v < mn) mn = v; if (v > mx) mx = v; sq += v * v; }
+    return {
+      "Samples": x.length, "Duration (s)": x.length / fs, "Mean": mean(x), "Std Dev": std(x, 0),
+      "RMS": Math.sqrt(sq / x.length), "Peak-to-Peak": mx - mn, "Minimum": mn, "Maximum": mx,
+    };
+  }
+
+  function extractAllFeatures(filtered, peaks, fs) {
+    const pulses = pulseFeatures(filtered, peaks, fs);
+    const summary = Object.assign({}, waveformFeatures(filtered, fs), timingFeatures(peaks, fs), summarizePulses(pulses));
+    return { summary, pulses };
+  }
+
+  // -------------------------------------------------------------- BP dataset
+
+  const FEATURE_KEYS = [
+    "Detected Pulses", "Mean IBI (s)", "IBI SD (s)", "IBI CV (%)", "Mean HR (BPM)", "Median HR (BPM)",
+    "HR SD (BPM)", "HR CV (%)", "Mean Amplitude", "Amplitude SD", "Amplitude CV (%)",
+    "Mean Pulse Width (s)", "Pulse Width SD (s)", "Mean Rise Time (s)", "Mean Fall Time (s)",
+    "Mean Rise Slope", "Mean Fall Slope", "Mean Pulse Area", "Pulse Area CV (%)", "Samples",
+    "Duration (s)", "Mean", "Std Dev", "RMS", "Peak-to-Peak", "Minimum", "Maximum",
+  ];
+
+  function parseBP(value) {
+    if (value === undefined || value === null) return [NaN, NaN];
+    const m = /(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/.exec(String(value));
+    return m ? [parseFloat(m[1]), parseFloat(m[2])] : [NaN, NaN];
+  }
+
+  function pearson(xs, ys) {
+    const n = xs.length;
+    if (n < 3) return NaN;
+    const mx = mean(xs), my = mean(ys);
+    let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < n; i++) {
+      sxy += (xs[i] - mx) * (ys[i] - my);
+      sxx += (xs[i] - mx) ** 2;
+      syy += (ys[i] - my) ** 2;
+    }
+    if (sxx < 1e-24 || syy < 1e-24) return NaN;
+    return sxy / Math.sqrt(sxx * syy);
+  }
+
+  function correlationTable(rows, featureNames) {
+    const out = [];
+    for (const f of featureNames) {
+      for (const target of ["RMS SBP", "RMS DBP"]) {
+        const xs = [], ys = [];
+        for (const r of rows) {
+          if (Number.isFinite(r[f]) && Number.isFinite(r[target])) { xs.push(r[f]); ys.push(r[target]); }
+        }
+        const rr = pearson(xs, ys);
+        out.push({ Feature: f, Target: target, N: xs.length, "Pearson r": rr, "Absolute |r|": Math.abs(rr) });
+      }
+    }
+    return out.sort((a, b) =>
+      a.Target === b.Target
+        ? (Number.isNaN(b["Absolute |r|"]) ? -1 : 0) - (Number.isNaN(a["Absolute |r|"]) ? -1 : 0) || b["Absolute |r|"] - a["Absolute |r|"]
+        : a.Target < b.Target ? -1 : 1);
+  }
+
+  // -------------------------------------------------------------- synthetic
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeSynthetic(hr, kind, opts) {
+    opts = opts || {};
+    const noise = opts.noise != null ? opts.noise : 0.02;
+    const wander = opts.wander != null ? opts.wander : 0.15;
+    const hrv = opts.hrv != null ? opts.hrv : 0.02;
+    const dc = opts.dc != null ? opts.dc : 300000;
+    const scale = opts.scale != null ? opts.scale : 2000;
+    const rand = mulberry32((opts.seed || 0) + 1);
+    const gauss = () => Math.sqrt(-2 * Math.log(rand() || 1e-12)) * Math.cos(2 * Math.PI * rand());
+    const n = 7500, seconds = n / SAMPLE_RATE;
+    const sig = new Float64Array(n);
+
+    const g = (t, c, w) => Math.exp(-0.5 * ((t - c) / w) ** 2);
+    const template = {
+      notch: (t) => g(t, 0.18, 0.075) + 0.45 * g(t, 0.47, 0.10),
+      strong_notch: (t) => g(t, 0.16, 0.07) + 0.70 * g(t, 0.46, 0.09),
+      sawtooth: (t) => {
+        const rise = Math.pow(Math.min(Math.max(t / 0.62, 0), 1), 1.3);
+        const fall = Math.min(Math.max((t - 0.62) / 0.14, 0), 1);
+        return rise * (1 - fall) + 0.10 * g(t, 0.86, 0.05);
+      },
+    }[kind || "notch"];
+
+    const period = 60 / hr;
+    const beats = [];
+    let tb = rand() * period;
+    while (tb < seconds + period) { beats.push(tb); tb += period * (1 + hrv * gauss()); }
+
+    for (let i = 0; i < beats.length; i++) {
+      const len = i + 1 < beats.length ? beats[i + 1] - beats[i] : period;
+      const m = Math.max(8, Math.round(len * SAMPLE_RATE));
+      const first = Math.round(beats[i] * SAMPLE_RATE);
+      const amp = 1 + 0.05 * gauss();
+      for (let k = 0; k < m; k++) {
+        const idx = first + k;
+        if (idx >= 0 && idx < n) sig[idx] += amp * template(k / m);
+      }
+    }
+
+    const p1 = rand() * 6.28, p2 = rand() * 6.28;
+    const samples = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = i / SAMPLE_RATE;
+      const v = sig[i] + wander * Math.sin(2 * Math.PI * 0.25 * t + p1) +
+        0.5 * wander * Math.sin(2 * Math.PI * 0.07 * t + p2) + noise * gauss();
+      samples[i] = Math.round(dc + scale * v);
+    }
+    const inside = beats.filter((b) => b >= 0 && b < seconds);
+    let trueHr = hr;
+    if (inside.length > 2) trueHr = 60 / ((inside[inside.length - 1] - inside[0]) / (inside.length - 1));
+    return { samples, trueHr };
+  }
+
+  const api = {
+    SAMPLE_RATE, LOW_CUTOFF, HIGH_CUTOFF, FILTER_ORDER, MIN_HEART_RATE, MAX_HEART_RATE, MIN_PEAK_DISTANCE,
+    CYCLE_COLUMNS, FEATURE_KEYS,
+    bandpassFilter, removeDC, normalizeSignal, findPeaks, estimatePulsePeriod, detectPulses,
+    calculateQuality, extractPPG, analyzeSamples, analyzeReading, extractAllFeatures,
+    timingFeatures, pulseFeatures, summarizePulses, waveformFeatures,
+    parseBP, pearson, correlationTable, makeSynthetic, median, mean, std,
+  };
+
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.PPG = api;
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+
+<script>
+"use strict";
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+  const fmt = (v, d) => (isNum(v) ? v.toFixed(d) : "N/A");
+  const P = window.PPG;
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  const DETAIL_COLUMNS = ["PatientId", "PatientName", "PatientAge", "BPCalibrationRef", "bp difference", "HeartRate",
+    "Temperature", "SpO2", "RespiratoryRate", "BPSystolic", "BPDiastolic", "PatientGender", "PatientSkinTone"];
+  const TABLE_COLUMNS = ["Timestamp", "PatientId", "PatientName", "PatientAge", "BPCalibrationRef", "bp difference",
+    "HeartRate", "Temperature", "SpO2", "RespiratoryRate", "BPSystolic", "BPDiastolic", "PatientGender"];
+  const RMS_CANDIDATES = ["BPCalibrationRef", "RMS BP", "RMSBP", "Calibrated RMS BP"];
+
+  const state = { rows: [], filtered: [], selected: null, results: new Map(), source: "demo", runId: 0, bp: null, analysis: null };
+
+  // ------------------------------------------------------------------ theme
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  // ------------------------------------------------------------------- data
+  function excelTime(v) {
+    if (v instanceof Date) v = null;
+    if (isNum(v) && v > 20000 && v < 80000) {
+      const d = new Date(Math.round((v - 25569) * 86400) * 1000);
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+    }
+    return v;
+  }
+
+  function cleanRows(json) {
+    return json.map((r, i) => {
+      const o = { _id: i };
+      for (const k of Object.keys(r)) o[String(k).trim()] = r[k];
+      if ("Timestamp" in o) o.Timestamp = excelTime(o.Timestamp);
+      return o;
+    });
+  }
+
+  function makeDemoRows() {
+    const cases = [[48, "sawtooth"], [55, "notch"], [62, "strong_notch"], [70, "notch"], [78, "sawtooth"], [85, "strong_notch"],
+      [95, "notch"], [105, "sawtooth"], [118, "strong_notch"], [130, "notch"], [150, "sawtooth"], [170, "notch"]];
+    return cases.map(([hr, kind], i) => {
+      const noisy = i % 3 === 2;
+      const { samples, trueHr } = P.makeSynthetic(hr, kind, { seed: i + 11, noise: noisy ? 0.08 : 0.015, wander: noisy ? 0.4 : 0.12, hrv: 0.02 });
+      return {
+        _id: i, _ppg: samples,
+        Timestamp: `Example ${String(i + 1).padStart(2, "0")}`,
+        PatientId: `EX-${String(i + 1).padStart(2, "0")}`, PatientName: `Example ${hr} bpm (${kind.replace("_", " ")})`,
+        HeartRate: Math.round(trueHr), PatientAge: "", PatientGender: "", PatientSkinTone: "",
+      };
+    });
+  }
+
+  // ----------------------------------------------------------------- status
+  function setSource(kind, label) {
+    state.source = kind;
+    const pill = $("sourcePill");
+    pill.className = "pill " + (kind === "demo" ? "warn" : "good");
+    pill.textContent = label;
+  }
+
+  function loadRows(rows) {
+    state.rows = rows;
+    state.results = new Map();
+    state.selected = null;
+    state.bp = null;
+    state.runId++;
+    buildFilters(true);
+    applyFilters();
+    computeAll();
+  }
+
+  // ---------------------------------------------------------------- filters
+  const opts = (sel, values, keep) => {
+    const el = $(sel);
+    const cur = keep === undefined ? el.value : keep;
+    el.innerHTML = ["All", ...values].map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+    el.value = values.map(String).concat(["All"]).includes(cur) ? cur : "All";
+  };
+  const uniqSorted = (arr) => [...new Set(arr.filter((v) => v !== "" && v != null).map(String))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  function buildFilters(reset) {
+    const idSel = reset ? "All" : $("fId").value;
+    opts("fId", uniqSorted(state.rows.map((r) => r.PatientId)), idSel);
+    const byId = state.rows.filter((r) => $("fId").value === "All" || String(r.PatientId) === $("fId").value);
+    opts("fName", uniqSorted(byId.map((r) => r.PatientName)), reset ? "All" : $("fName").value);
+    const byName = byId.filter((r) => $("fName").value === "All" || String(r.PatientName) === $("fName").value);
+    opts("fDate", uniqSorted(byName.map((r) => String(r.Timestamp).slice(0, 10))), reset ? "All" : $("fDate").value);
+  }
+
+  function applyFilters() {
+    const id = $("fId").value, name = $("fName").value, date = $("fDate").value;
+    state.filtered = state.rows.filter((r) =>
+      (id === "All" || String(r.PatientId) === id) &&
+      (name === "All" || String(r.PatientName) === name) &&
+      (date === "All" || String(r.Timestamp).slice(0, 10) === date));
+    $("count").textContent = state.filtered.length;
+    renderTable();
+    if (state.selected && !state.filtered.includes(state.selected)) { state.selected = null; renderReading(); }
+    renderAgreement();
+  }
+
+  // ------------------------------------------------------------------ table
+  function hasCol(c) { return state.rows.some((r) => c in r && r[c] !== ""); }
+
+  function qualityPill(cls) {
+    const map = { Good: "good", Acceptable: "warn", Poor: "bad" };
+    return `<span class="pill ${map[cls] || "none"}">${esc(cls || "…")}</span>`;
+  }
+
+  function renderTable() {
+    const cols = TABLE_COLUMNS.filter(hasCol);
+    const head = cols.map((c) => `<th>${esc(c)}</th>`).join("") + '<th class="num">PPG HR (BPM)</th><th>PPG Quality</th>';
+    $("readings").tHead.innerHTML = `<tr>${head}</tr>`;
+    const body = state.filtered.map((r, i) => {
+      const res = state.results.get(r._id);
+      const cells = cols.map((c) => `<td>${esc(r[c])}</td>`).join("");
+      return `<tr data-i="${i}" tabindex="0" aria-selected="${r === state.selected}">${cells}${resultCells(res)}</tr>`;
+    }).join("");
+    $("readings").tBodies[0].innerHTML = body || `<tr><td colspan="${cols.length + 2}">No readings available.</td></tr>`;
+    $("btnAll").disabled = $("btnView").disabled = !state.filtered.length;
+  }
+
+  function resultCells(res) {
+    if (!res) return '<td class="num">…</td><td>…</td>';
+    return `<td class="num">${res.hr == null ? "N/A" : res.hr.toFixed(1)}</td><td>${qualityPill(res.cls)} <span class="mono small muted">${res.score.toFixed(0)}%</span></td>`;
+  }
+
+  function updateRowResult(reading) {
+    const idx = state.filtered.indexOf(reading);
+    if (idx < 0) return;
+    const tr = $("readings").tBodies[0].rows[idx];
+    if (!tr) return;
+    const n = tr.cells.length;
+    const tmp = document.createElement("tbody");
+    tmp.innerHTML = `<tr>${resultCells(state.results.get(reading._id))}</tr>`;
+    tr.deleteCell(n - 1);
+    tr.deleteCell(n - 2);
+    tr.append(...tmp.rows[0].cells);
+  }
+
+  function onRowActivate(tr) {
+    if (!tr || tr.dataset.i === undefined) return;
+    state.selected = state.filtered[+tr.dataset.i];
+    for (const r of $("readings").tBodies[0].rows) r.setAttribute("aria-selected", r === tr);
+    renderReading(true);
+  }
+
+  // ---------------------------------------------- background analysis of all
+  function summarize(reading) {
+    const a = P.analyzeReading(reading);
+    if (!a) return { hr: null, cls: "Poor", score: 0, peaks: 0, samples: 0 };
+    return { hr: a.quality.heart_rate, cls: a.quality.classification, score: a.quality.score, peaks: a.quality.peak_count, samples: a.raw.length };
+  }
+
+  async function computeAll() {
+    const run = state.runId;
+    const rows = state.rows;
+    let done = 0;
+    for (const r of rows) {
+      if (run !== state.runId) return;
+      try { state.results.set(r._id, summarize(r)); } catch (e) { state.results.set(r._id, { hr: null, cls: "Poor", score: 0, peaks: 0, samples: 0 }); }
+      updateRowResult(r);
+      done++;
+      if (done % 3 === 0) { renderAgreement(done); await tick(); }
+    }
+    renderAgreement();
+  }
+
+  function renderAgreement(progress) {
+    const box = $("agree");
+    const list = state.filtered;
+    const total = state.rows.length;
+    const withRes = list.filter((r) => state.results.get(r._id));
+    if (progress && progress < total) { box.className = "notice info"; box.textContent = `Analysing readings… ${progress} of ${total}`; return; }
+    const comparable = withRes.filter((r) => isNum(state.results.get(r._id).hr) && isNum(+r.HeartRate) && r.HeartRate !== "");
+    if (!comparable.length) { box.className = "notice info"; box.textContent = "No device heart rate available to compare with the PPG heart rate."; return; }
+    const within = (r, t) => Math.abs(state.results.get(r._id).hr - +r.HeartRate) <= t;
+    const w5 = comparable.filter((r) => within(r, 5)).length;
+    const good = comparable.filter((r) => state.results.get(r._id).cls === "Good");
+    const g5 = good.filter((r) => within(r, 5)).length;
+    const mae = comparable.reduce((t, r) => t + Math.abs(state.results.get(r._id).hr - +r.HeartRate), 0) / comparable.length;
+    const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+    const isDemo = state.source === "demo";
+    box.className = "notice " + (pct(w5, comparable.length) >= 85 ? "good" : "warn");
+    box.innerHTML = `<strong>Heart-rate check${isDemo ? " (example signals: the HeartRate column is the true rate)" : " against the device HeartRate column"}:</strong> ` +
+      `${w5} of ${comparable.length} readings (${pct(w5, comparable.length)}%) agree within 5 BPM, average difference ${mae.toFixed(1)} BPM. ` +
+      (good.length ? `Among ${good.length} readings rated Good, ${g5} (${pct(g5, good.length)}%) agree within 5 BPM.` : "");
+  }
+
+  // ------------------------------------------------------------------ plots
+  function baseLayout(yTitle) {
+    const ink = css("--ink-2"), grid = css("--grid"), line = css("--line");
+    return {
+      margin: { l: 64, r: 16, t: 8, b: 44 }, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+      font: { family: "IBM Plex Sans, system-ui, sans-serif", size: 12, color: ink },
+      xaxis: { title: { text: "Time (s)" }, gridcolor: grid, linecolor: line, zeroline: false, tickfont: { family: "IBM Plex Mono, monospace", size: 11 } },
+      yaxis: { title: { text: yTitle }, gridcolor: grid, linecolor: line, zeroline: false, tickfont: { family: "IBM Plex Mono, monospace", size: 11 } },
+      hovermode: "x unified", showlegend: false,
+      hoverlabel: { bgcolor: css("--surface"), bordercolor: line, font: { color: css("--ink"), family: "IBM Plex Mono, monospace", size: 12 } },
+    };
+  }
+
+  function plot(el, xs, ys, yTitle, opts2) {
+    opts2 = opts2 || {};
+    const traces = [{ x: xs, y: ys, type: "scatter", mode: "lines", name: opts2.name || yTitle, line: { color: css("--trace"), width: 1.4, simplify: false }, hovertemplate: "%{y:,.1f}" }];
+    if (opts2.peaks && opts2.peaks.length) {
+      traces.push({
+        x: opts2.peaks.map((p) => xs[p]), y: opts2.peaks.map((p) => ys[p]), type: "scatter", mode: "markers", name: "Detected pulse",
+        marker: { color: css("--pulse"), size: 9, line: { color: css("--surface"), width: 2 } }, hovertemplate: "pulse %{y:,.1f}",
+      });
+    }
+    const layout = baseLayout(yTitle);
+    if (opts2.zero) layout.shapes = [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 0, y1: 0, line: { color: css("--ink-3"), width: 1, dash: "dot" } }];
+    Plotly.newPlot(el, traces, layout, { responsive: true, displaylogo: false, displayModeBar: false });
+  }
+
+  // ---------------------------------------------------------- selected view
+  function metric(label, value, hero) {
+    return `<div class="metric${hero ? " hero" : ""}"><div class="l">${esc(label)}</div><div class="v">${value}</div></div>`;
+  }
+  const m = (label, v, d, unit) => metric(label, isNum(v) ? `${v.toFixed(d)}${unit ? ` <small>${unit}</small>` : ""}` : "N/A");
+
+  function kvTable(rows) {
+    return `<div class="tablewrap static"><table class="kv"><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+
+  function rowsTable(cols, rows, fmtRow) {
+    return `<div class="tablewrap"><table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td class="num">${esc(fmtRow(c, r[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  }
+
+  function chartBlock(id, title, note) {
+    return `<div class="section"><div class="charthead"><h3>${esc(title)}</h3><span class="small muted">${note || ""}</span></div><div id="${id}" class="chart" role="img" aria-label="${esc(title)}"></div></div>`;
+  }
+
+  function renderReading(scroll) {
+    const host = $("reading");
+    const reading = state.selected;
+    if (!reading) { host.innerHTML = ""; state.analysis = null; return; }
+
+    const a = P.analyzeReading(reading);
+    state.analysis = a;
+    if (!a) { host.innerHTML = '<div class="notice bad">No valid PPG samples found in this reading.</div>'; return; }
+
+    const q = a.quality;
+    const feats = P.extractAllFeatures(a.filtered, a.peaks, 500);
+    const S = feats.summary;
+    const details = DETAIL_COLUMNS.filter((c) => c in reading).map((c) => [c, reading[c]]);
+    const t = Array.from(a.raw, (_, i) => i / 500);
+    const devHr = reading.HeartRate === "" || reading.HeartRate == null ? NaN : +reading.HeartRate;
+    const diff = isNum(q.heart_rate) && isNum(devHr) ? q.heart_rate - devHr : NaN;
+    const diffCls = !isNum(diff) ? "none" : Math.abs(diff) <= 5 ? "good" : Math.abs(diff) <= 10 ? "warn" : "bad";
+    const clsMap = { Good: ["good", "GOOD"], Acceptable: ["warn", "ACCEPTABLE"], Poor: ["bad", "POOR"] }[q.classification];
+
+    let html = "";
+    html += `<div class="notice good" role="status">Selected Reading : <strong class="mono">${esc(reading.Timestamp)}</strong></div>`;
+    if (a.raw.length !== 7500) html += `<div class="notice warn">This reading has ${a.raw.length} PPG samples, not the 7,500 expected for the 500 Hz VinCense format. Numbers below assume 500 Hz and are not reliable. It is left out of the BP research dataset.</div>`;
+    html += `<details open><summary>Selected Reading Details</summary><div class="inner">${kvTable(details)}</div></details>`;
+
+    html += `<section class="panel">${chartBlock("c1", "1. Raw IR Signal", `${a.raw.length} samples at 500 Hz`)}</section>`;
+    html += `<section class="panel">${chartBlock("c2", "2. DC-Removed PPG", "rolling-median baseline removed")}</section>`;
+    html += `<section class="panel">${chartBlock("c3", "3. Filtered PPG", "4th-order Butterworth band-pass, 0.5 to 8 Hz, zero-phase")}</section>`;
+    html += `<section class="panel"><div class="charthead"><h3>4. Pulse Detection</h3><div class="legend"><span><i style="background:var(--trace)"></i>Filtered PPG</span><span><i style="background:var(--pulse)"></i>Detected pulse (${a.peaks.length})</span></div></div><div id="c4" class="chart" role="img" aria-label="Pulse detection"></div></section>`;
+
+    html += `<section class="panel"><div class="section"><div class="charthead"><h2>5. PPG Signal Quality</h2><span class="pill ${clsMap[0]}">${clsMap[1]}</span></div>
+      <div class="metrics">
+        ${metric("Signal Quality", `${q.score.toFixed(1)}<small>%</small>`, true)}
+        ${metric("Detected Pulses", q.peak_count, true)}
+        ${metric("Estimated Pulse Rate", q.heart_rate == null ? "Not reliable" : `${q.heart_rate.toFixed(1)} <small>BPM</small>`, true)}
+        ${metric("Device Heart Rate", isNum(devHr) ? `${devHr} <small>BPM</small>` : "N/A", true)}
+      </div>
+      ${isNum(diff) ? `<div class="notice ${diffCls === "good" ? "good" : diffCls === "warn" ? "warn" : "bad"}">PPG pulse rate differs from the device heart rate by <strong class="mono">${diff > 0 ? "+" : ""}${diff.toFixed(1)} BPM</strong>${Math.abs(diff) <= 5 ? " (within 5 BPM)." : "."}${q.classification === "Poor" ? " The signal quality is Poor, so treat either number with caution." : ""}</div>` : ""}
+      <h3>Quality Components</h3>
+      <div class="metrics">
+        ${metric("Pulse Interval", `${q.interval_score.toFixed(0)}<small>%</small>`)}
+        ${metric("Amplitude", `${q.amplitude_score.toFixed(0)}<small>%</small>`)}
+        ${metric("Noise", `${q.noise_score.toFixed(0)}<small>%</small>`)}
+        ${metric("Coverage", `${q.coverage_score.toFixed(0)}<small>%</small>`)}
+      </div>
+      <details><summary>Technical Analysis</summary><div class="inner small">
+        ${q.median_interval != null ? `<p>Median pulse interval: <span class="mono">${q.median_interval.toFixed(3)} s</span></p>` : ""}
+        ${q.interval_cv != null ? `<p>Pulse interval variation: <span class="mono">${(q.interval_cv * 100).toFixed(2)}%</span></p>` : ""}
+        <p>Sampling rate: 500 Hz. Band-pass: 0.5 to 8.0 Hz. Filter order: 4. Weights: interval 35%, amplitude 25%, noise 25%, coverage 15%. Good is 80 or more, Acceptable 60 or more.</p>
+      </div></details>
+      <div class="notice info small">The quality percentage is an engineering signal-quality index based on pulse consistency, amplitude consistency, noise and waveform coverage. It is not a medical diagnosis or clinical validation.</div></div></section>`;
+
+    html += `<section class="panel"><div class="section"><div class="sectionhead"><h2>6. PPG Feature Analysis</h2><p class="small muted">Engineering analysis calculated from the selected PPG waveform. For research and testing, not clinical validation.</p></div>
+      <h3>Heart Rate &amp; Pulse Timing</h3>
+      <div class="metrics">${m("Mean HR", S["Mean HR (BPM)"], 1, "BPM")}${m("Median HR", S["Median HR (BPM)"], 1, "BPM")}${m("Mean IBI", S["Mean IBI (s)"], 3, "s")}${m("IBI Variation", S["IBI CV (%)"], 1, "%")}</div>
+      ${rowsTable(["Detected Pulses", "HR SD (BPM)", "HR CV (%)", "IBI SD (s)"], [S], (c, v) => (c === "Detected Pulses" ? v : fmt(v, 3)))}
+      <h3>Pulse Morphology</h3>
+      <div class="metrics">${m("Mean Amplitude", S["Mean Amplitude"], 2)}${m("Amplitude Variation", S["Amplitude CV (%)"], 1, "%")}${m("Pulse Width", S["Mean Pulse Width (s)"], 3, "s")}${m("Pulse Area Variation", S["Pulse Area CV (%)"], 1, "%")}</div>
+      ${rowsTable(["Mean Rise Time (s)", "Mean Fall Time (s)", "Mean Rise Slope", "Mean Fall Slope", "Mean Pulse Area", "Pulse Width SD (s)"], [S], (c, v) => fmt(v, 3))}
+      <h3>Waveform Statistics</h3>
+      <div class="metrics">${metric("Samples", S["Samples"])}${m("Duration", S["Duration (s)"], 2, "s")}${m("Peak-to-Peak", S["Peak-to-Peak"], 2)}${m("RMS", S["RMS"], 2)}</div>
+      ${feats.pulses.length ? `<details><summary>Pulse-by-Pulse Feature Table (${feats.pulses.length})</summary><div class="inner">${rowsTable(Object.keys(feats.pulses[0]), feats.pulses, (c, v) => (Number.isInteger(v) ? v : fmt(v, 3)))}</div></details>` : ""}
+      <p class="small muted">Pulse rate from the quality score uses 60 ÷ median pulse interval. Mean HR averages the rate of each beat, so it can sit a little higher when beat timing varies.</p></div></section>`;
+
+    html += `<section class="panel" id="bpPanel"></section>`;
+
+    html += `<section class="panel"><h2>Selected Reading Export</h2><p class="small muted">Exports only the reading currently selected in the table.</p>
+      <div class="actions"><button class="btn primary" id="btnSel" type="button">Download Selected Reading PDF</button></div>
+      <div id="selMsg" class="notice info" role="status" hidden></div></section>`;
+
+    host.innerHTML = html;
+    plot($("c1"), t, a.raw, "IR value");
+    plot($("c2"), t, a.dcRemoved, "DC-removed IR", { zero: true });
+    plot($("c3"), t, a.filtered, "Filtered PPG", { zero: true });
+    plot($("c4"), t, a.filtered, "Filtered PPG", { zero: true, peaks: a.peaks });
+    renderBP();
+    $("btnSel").addEventListener("click", () => exportPDF("selected", $("btnSel"), $("selMsg")));
+    if (scroll) host.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ------------------------------------------------------------ BP research
+  function findRmsColumn() {
+    for (const c of RMS_CANDIDATES) if (state.rows.some((r) => c in r)) return c;
+    const keys = state.rows.length ? Object.keys(state.rows[0]) : [];
+    return keys.find((k) => /rms/i.test(k) && /bp/i.test(k)) || null;
+  }
+
+  function renderBP() {
+    const el = $("bpPanel");
+    if (!el) return;
+    let html = `<div class="section"><div class="sectionhead"><h2>7. Cuffless BP Research</h2><p class="small muted">PPG-derived features are paired with the calibrated RMS cuff SBP/DBP values in the uploaded sheet. RMS BP is the reference target. No medical correction or clinical validation is claimed.</p></div>
+      <div class="notice warn"><strong>No cuffless BP number is shown.</strong> A blood-pressure estimate needs a model that has been fitted and validated on separate patients, and that model does not exist yet. This section only builds the research table.</div>
+      <div class="actions"><button class="btn primary" id="btnBP" type="button">Build PPG → RMS BP Research Dataset</button></div><div id="bpMsg" class="notice info" role="status" hidden></div>`;
+    const bp = state.bp;
+    if (bp) {
+      const d = bp.rows;
+      const sbp = d.map((r) => r["RMS SBP"]), dbp = d.map((r) => r["RMS DBP"]);
+      const rng = (a) => (a.length ? `${Math.min(...a).toFixed(0)}–${Math.max(...a).toFixed(0)}` : "N/A");
+      const flagged = d.filter((r) => /SUSPECT/i.test(r["RMS Reference Flag"] || "")).length;
+      const patients = new Set(d.map((r) => r.PatientId)).size;
+      html += `<div class="notice good">Valid BP research recordings: <strong>${d.length}</strong> from ${patients} patient${patients === 1 ? "" : "s"} | RMS reference column: <strong>${esc(bp.column)}</strong></div>
+        <div class="metrics">${metric("Research Samples", d.length)}${metric("RMS SBP Range", rng(sbp))}${metric("RMS DBP Range", rng(dbp))}${bp.hasFlag ? metric("Repeated RMS references", `${flagged} <small>of ${d.length}</small>`) : ""}</div>`;
+      if (d.length < 20) html += `<div class="notice warn">This is a small research dataset. Correlation results will not be reliable for BP accuracy assessment.</div>`;
+      if (bp.hasFlag && flagged) html += `<div class="notice warn">${flagged} readings carry an RMS value that repeats from the previous reading of the same patient. Those may be copied forward rather than freshly measured, so do not treat them as independent cuff measurements.</div>`;
+      if (bp.skipped) html += `<div class="notice info">${bp.skipped} reading${bp.skipped === 1 ? " was" : "s were"} left out (no RMS value, not 7,500 samples, or fewer than 2 detected pulses).</div>`;
+      const cols = ["Timestamp", "PatientId", "PatientAge", "PatientGender", "Skin Tone", ...(bp.hasFlag ? ["RMS Reference Flag"] : []), "RMS SBP", "RMS DBP", ...P.FEATURE_KEYS];
+      html += `<details open><summary>PPG Features + RMS BP Target Dataset</summary><div class="inner">
+        <div class="actions"><button class="btn" id="btnCsv" type="button">Download BP Research Dataset CSV</button></div>
+        <div class="tablewrap"><table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${d.slice(0, 200).map((r) => `<tr>${cols.map((c) => `<td class="${isNum(r[c]) ? "num" : ""}">${esc(isNum(r[c]) ? (Number.isInteger(r[c]) ? r[c] : +r[c].toPrecision(5)) : r[c])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        ${d.length > 200 ? `<p class="small muted">Showing the first 200 rows. The CSV has all ${d.length}.</p>` : ""}</div></details>`;
+      const cor = bp.correlations.filter((c) => Number.isFinite(c["Pearson r"]));
+      if (cor.length) {
+        const top = (tg) => cor.filter((c) => c.Target === tg).slice(0, 12);
+        html += `<details open><summary>Exploratory PPG Feature ↔ RMS BP Correlation</summary><div class="inner">
+          ${["RMS SBP", "RMS DBP"].map((tg) => `<h3>${tg} (top 12 of ${cor.filter((c) => c.Target === tg).length})</h3>${rowsTable(["Feature", "N", "Pearson r"], top(tg), (c, v) => (c === "Pearson r" ? fmt(v, 3) : v))}`).join("")}
+          <p class="small muted">Pearson correlation is exploratory only. It does not establish BP accuracy or clinical validity. Several readings come from the same person, which makes correlations look stronger than they would on new patients. The CSV holds every feature.</p></div></details>`;
+      }
+    }
+    html += `</div>`;
+    el.innerHTML = html;
+    $("btnBP").addEventListener("click", buildBP);
+    if ($("btnCsv")) $("btnCsv").addEventListener("click", () => saveCsv());
+  }
+
+  async function buildBP() {
+    const btn = $("btnBP"), msg = $("bpMsg");
+    const col = findRmsColumn();
+    if (!col) { msg.hidden = false; msg.className = "notice bad"; msg.textContent = "Calibrated RMS BP column not found. Expected BPCalibrationRef or a column with RMS and BP in its name."; return; }
+    btn.disabled = true;
+    msg.hidden = false; msg.className = "notice info";
+    const rows = [];
+    let skipped = 0, i = 0;
+    for (const r of state.filtered) {
+      i++;
+      msg.textContent = `Extracting PPG features… ${i} of ${state.filtered.length}`;
+      if (i % 4 === 0) await tick();
+      const [sbp, dbp] = P.parseBP(r[col]);
+      if (!isNum(sbp) || !isNum(dbp)) { skipped++; continue; }
+      const a = P.analyzeReading(r);
+      if (!a || a.raw.length !== 7500 || a.peaks.length < 2) { skipped++; continue; }
+      const S = P.extractAllFeatures(a.filtered, a.peaks, 500).summary;
+      const row = { Timestamp: r.Timestamp, PatientId: r.PatientId, PatientAge: isNum(+r.PatientAge) && r.PatientAge !== "" ? +r.PatientAge : "", PatientGender: r.PatientGender || "", "Skin Tone": r.PatientSkinTone || "", "RMS Reference Flag": r.RMS_Reference_Flag || "", "RMS SBP": sbp, "RMS DBP": dbp };
+      for (const k of P.FEATURE_KEYS) row[k] = S[k];
+      rows.push(row);
+    }
+    const names = ["PatientAge", ...P.FEATURE_KEYS];
+    state.bp = { rows, column: col, skipped, hasFlag: rows.some((r) => r["RMS Reference Flag"]), correlations: sortCorr(P.correlationTable(rows, names)) };
+    renderBP();
+  }
+
+  function sortCorr(list) {
+    return list.sort((a, b) => (a.Target === b.Target ? 0 : a.Target < b.Target ? -1 : 1) ||
+      (Number.isNaN(a["Absolute |r|"]) - Number.isNaN(b["Absolute |r|"])) || (b["Absolute |r|"] - a["Absolute |r|"]) || 0);
+  }
+
+  // ----------------------------------------------------------------- saving
+  async function saveFile(filename, data, mime) {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+    if (window.claude && window.claude.use) {
+      const dl = await window.claude.use("downloads");
+      if (!dl) throw Object.assign(new Error("Saving files is not available in this view."), { code: "unavailable" });
+      return dl.save({ filename, data: blob });
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return { status: "saved" };
+  }
+
+  function csvCell(v) { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }
+
+  async function saveCsv() {
+    const d = state.bp.rows;
+    const cols = ["Timestamp", "PatientId", "PatientAge", "PatientGender", "Skin Tone", "RMS Reference Flag", "RMS SBP", "RMS DBP", ...P.FEATURE_KEYS];
+    const text = [cols.join(","), ...d.map((r) => cols.map((c) => csvCell(r[c])).join(","))].join("\n");
+    try { await saveFile("PPG_to_RMS_BP_research_dataset.csv", text, "text/csv"); } catch (e) { const m2 = $("bpMsg"); m2.hidden = false; m2.className = "notice warn"; m2.textContent = saveError(e); }
+  }
+
+  function saveError(e) {
+    if (e && e.code === "declined") return "The save was cancelled.";
+    if (e && e.code === "unavailable") return "Saving files is not available in this view. Open the dashboard in a browser tab to export.";
+    return "The file could not be saved: " + ((e && e.message) || "unknown error");
+  }
+
+  // -------------------------------------------------------------------- PDF
+  function plotPng(xs, ys, o) {
+    const W = 1100, H = o.h || 360, c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+    const L = 84, R = 16, T = 34, B = 44;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < ys.length; i++) { if (ys[i] < lo) lo = ys[i]; if (ys[i] > hi) hi = ys[i]; }
+    if (o.zero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+    if (hi === lo) { hi += 1; lo -= 1; }
+    const pad = (hi - lo) * 0.05; lo -= pad; hi += pad;
+    const X = (i) => L + (i / (xs - 1)) * (W - L - R);
+    const Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    g.font = "13px sans-serif"; g.fillStyle = "#222"; g.strokeStyle = "#e3e8ea"; g.lineWidth = 1;
+    g.textAlign = "right";
+    for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4, y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke(); g.fillText(Math.abs(v) >= 1000 ? Math.round(v).toLocaleString("en-US") : v.toFixed(1), L - 8, y + 4); }
+    g.textAlign = "center";
+    for (let s = 0; s <= xs / 500; s += xs / 500 > 10 ? 2 : 1) { const x = X(s * 500); g.fillText(String(s), x, H - 22); }
+    g.fillText("Time (s)", (L + W - R) / 2, H - 5);
+    g.textAlign = "left"; g.font = "600 15px sans-serif"; g.fillText(o.title, L, 20);
+    if (o.zero) { g.strokeStyle = "#8a99a1"; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(L, Y(0)); g.lineTo(W - R, Y(0)); g.stroke(); g.setLineDash([]); }
+    g.strokeStyle = "#0a6f6a"; g.lineWidth = 1.3; g.beginPath();
+    for (let i = 0; i < ys.length; i++) (i ? g.lineTo(X(i), Y(ys[i])) : g.moveTo(X(i), Y(ys[i])));
+    g.stroke();
+    if (o.peaks) { g.fillStyle = "#d4470f"; for (const p of o.peaks) { g.beginPath(); g.arc(X(p), Y(ys[p]), 4.5, 0, 6.3); g.fill(); } }
+    return c.toDataURL("image/jpeg", 0.85);
+  }
+
+  const asciiText = (s) => String(s == null ? "" : s).replace(/[–—]/g, "-").replace(/[^\x20-\x7e]/g, "?");
+
+  function pdfTable(doc, x, y, widths, rows, o) {
+    o = o || {};
+    const fs = o.font || 8, rh = o.rowH || 6;
+    doc.setFontSize(fs);
+    rows.forEach((row, ri) => {
+      let cx = x;
+      row.forEach((cell, ci) => {
+        const isHead = o.header && ri === 0;
+        const isLabel = o.labelCols && o.labelCols.includes(ci);
+        if (isHead || isLabel) { doc.setFillColor(isHead ? 225 : 244, isHead ? 229 : 246, isHead ? 232 : 247); doc.rect(cx, y, widths[ci], rh, "F"); }
+        doc.setDrawColor(190); doc.rect(cx, y, widths[ci], rh);
+        doc.setFont("helvetica", isHead || isLabel ? "bold" : "normal");
+        const txt = asciiText(cell);
+        const maxW = widths[ci] - 2;
+        let out = txt;
+        while (out.length > 1 && doc.getTextWidth(out) > maxW) out = out.slice(0, -1);
+        doc.text(out, cx + 1, y + rh - 1.8);
+        cx += widths[ci];
+      });
+      y += rh;
+    });
+    return y;
+  }
+
+  function pdfVals(reading, a) {
+    const q = a.quality;
+    const g = (...names) => { for (const n of names) if (n in reading && reading[n] !== "" && reading[n] != null) return reading[n]; return ""; };
+    const sys = g("BPSystolic", "BP Systolic"), dia = g("BPDiastolic", "BP Diastolic");
+    const rms = g("RMS BP", "RMSBP", "BPRMS", "Calibrated RMS BP", "BPCalibrationRef", "BP Calibration RMS");
+    const dev = sys !== "" && dia !== "" ? `${sys}/${dia}` : "";
+    let bpDiff = g("BP Difference", "bp difference", "BPDifference");
+    const [rs, rd] = P.parseBP(rms);
+    if (dev && isNum(rs)) bpDiff = `${Math.abs(+sys - rs)}/${Math.abs(+dia - rd)}`;
+    return {
+      ts: g("Timestamp"), id: g("PatientId", "PatientID"), name: g("PatientName", "Patient Name"), age: g("PatientAge", "Age"),
+      gender: g("PatientGender", "Gender"), skin: g("PatientSkinTone", "SkinTone", "Skin Colour", "Skin Color"),
+      devBp: dev, rms, bpDiff, devHr: g("HeartRate", "HR", "PulseRate"),
+      estHr: q.heart_rate == null ? "Not reliable" : q.heart_rate.toFixed(1), spo2: g("SpO2", "SPO2", "OxygenSaturation"),
+      temp: g("Temperature", "Temp", "SkinTemperature"), rr: g("RespiratoryRate", "RR", "RespRate"),
+    };
+  }
+
+  function infoTable(doc, y, reading, a) {
+    const v = pdfVals(reading, a), q = a.quality;
+    return pdfTable(doc, 10, y, [27, 45, 27, 40, 32, 45], [
+      ["Timestamp", v.ts, "Patient ID", v.id, "Patient Name", v.name],
+      ["Age", v.age, "Gender", v.gender, "Skin Tone", v.skin],
+      ["Device BP", v.devBp, "RMS BP", v.rms, "BP Difference", v.bpDiff],
+      ["Device HR", v.devHr, "Estimated HR", v.estHr, "Detected Pulses", q.peak_count],
+      ["PPG Quality", `${q.score.toFixed(1)}%`, "Classification", q.classification, "Samples", a.raw.length],
+    ], { labelCols: [0, 2, 4], font: 8, rowH: 6.5 });
+  }
+
+  function summaryPages(doc, items, title) {
+    const headers = ["Reading", "Timestamp", "Patient ID", "Name", "Age", "Device BP", "RMS BP", "BP Diff", "Device HR", "Est. HR", "Pulses", "PPG %", "Quality", "Gender", "Skin"];
+    const widths = [14, 33, 18, 34, 10, 20, 18, 16, 16, 15, 13, 14, 20, 16, 12];
+    let y = 0, first = true;
+    const newPage = () => { doc.addPage(); y = 14; doc.setFont("helvetica", "bold"); doc.setFontSize(first ? 16 : 11); doc.text(asciiText(title + (first ? "" : " (continued)")), 10, y); y += 8; first = false; y = pdfTable(doc, 10, y, widths, [headers], { header: true, font: 6.5, rowH: 6 }); };
+    newPage();
+    for (const it of items) {
+      if (y > 195) newPage();
+      const v = pdfVals(it.reading, it.a);
+      y = pdfTable(doc, 10, y, widths, [[it.n, v.ts, v.id, v.name, v.age, v.devBp, v.rms, v.bpDiff, v.devHr, v.estHr, it.a.quality.peak_count, `${it.a.quality.score.toFixed(1)}%`, it.a.quality.classification, v.gender, v.skin]], { font: 6.5, rowH: 5.2 });
+    }
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+    doc.text("PPG quality is an engineering signal-quality index (pulse consistency, amplitude consistency, noise, coverage). Not a medical diagnosis or clinical validation.", 10, Math.min(y + 6, 203));
+  }
+
+  async function exportPDF(kind, btn, msgEl) {
+    if (!window.jspdf) { msgEl.hidden = false; msgEl.className = "notice bad"; msgEl.textContent = "The PDF library did not load. Check your connection and reload."; return; }
+    const label = btn.textContent;
+    btn.disabled = true;
+    msgEl.hidden = false; msgEl.className = "notice info";
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const list = kind === "selected" ? [state.selected] : state.filtered;
+      const titles = { all: "VinCense PPG Waveform Analysis", view: "VinCense PPG - Current View (Raw, DC-Removed, Filtered)", selected: "VinCense - Selected Reading PPG Analysis" };
+      doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.text(titles[kind], 10, 24);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+      doc.text(`Sampling rate: 500 Hz | Band-pass: 0.5-8.0 Hz | Filter order: 4 | Readings: ${list.length}`, 10, 34);
+      if (state.source === "demo") doc.text("Example data: computer-generated signals.", 10, 42);
+      const items = [];
+      let n = 0;
+      for (const reading of list) {
+        n++;
+        msgEl.textContent = `Preparing PDF… reading ${n} of ${list.length}`;
+        await tick();
+        const a = P.analyzeReading(reading);
+        if (!a) continue;
+        items.push({ n, reading, a });
+        const xs = a.raw.length;
+        doc.addPage();
+        doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+        doc.text(asciiText(`Reading ${n} - ${reading.Timestamp}`), 10, 12);
+        let y = infoTable(doc, 16, reading, a) + 4;
+        if (kind === "all") {
+          doc.addImage(plotPng(xs, a.filtered, { title: `VinCense PPG - Reading ${n} | Quality ${a.quality.score.toFixed(1)}% (${a.quality.classification})`, zero: true, peaks: a.peaks, h: 400 }), "JPEG", 10, y, 270, 98);
+        } else if (kind === "view") {
+          const h = 46, w = 270;
+          doc.addImage(plotPng(xs, a.raw, { title: "1. Raw IR", h: 230 }), "JPEG", 10, y, w, h);
+          doc.addImage(plotPng(xs, a.dcRemoved, { title: "2. DC-Removed PPG", zero: true, h: 230 }), "JPEG", 10, y + h + 2, w, h);
+          doc.addImage(plotPng(xs, a.filtered, { title: "3. Filtered PPG (detected pulses marked)", zero: true, peaks: a.peaks, h: 230 }), "JPEG", 10, y + 2 * (h + 2), w, h);
+        } else {
+          doc.addImage(plotPng(xs, a.raw, { title: "1. Raw IR", h: 260 }), "JPEG", 10, y, 270, 64);
+          doc.addImage(plotPng(xs, a.dcRemoved, { title: "2. DC-Removed PPG", zero: true, h: 260 }), "JPEG", 10, y + 68, 270, 64);
+          doc.addPage();
+          doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.text("3. Filtered PPG with detected pulses", 10, 12);
+          doc.addImage(plotPng(xs, a.filtered, { title: `Filtered PPG - Quality ${a.quality.score.toFixed(1)}% (${a.quality.classification})`, zero: true, peaks: a.peaks, h: 330 }), "JPEG", 10, 16, 270, 82);
+          const v = pdfVals(reading, a), q = a.quality;
+          doc.setFontSize(13); doc.text("4. Vitals & Signal Analysis", 10, 106);
+          pdfTable(doc, 10, 110, [34, 43, 43, 43, 35, 43], [
+            ["Device BP", v.devBp, "Calibrated RMS BP", v.rms, "BP Difference", v.bpDiff],
+            ["Device HR", v.devHr, "Estimated PPG HR", v.estHr === "Not reliable" ? v.estHr : v.estHr + " BPM", "Detected Pulses", q.peak_count],
+            ["SpO2", v.spo2, "Temperature", v.temp, "Respiratory Rate", v.rr],
+            ["PPG Quality", `${q.score.toFixed(1)}%`, "Classification", q.classification, "Samples", a.raw.length],
+            ["Pulse Interval", `${q.interval_score.toFixed(0)}%`, "Amplitude", `${q.amplitude_score.toFixed(0)}%`, "Noise", `${q.noise_score.toFixed(0)}%`],
+            ["Coverage", `${q.coverage_score.toFixed(0)}%`, "Sampling Rate", "500 Hz", "Filter", "0.5-8.0 Hz"],
+          ], { labelCols: [0, 2, 4], font: 8, rowH: 7 });
+          doc.setFont("helvetica", "normal"); doc.setFontSize(8);
+          doc.text(asciiText(`PPG analysis: pulse consistency ${q.interval_score.toFixed(0)}%, amplitude consistency ${q.amplitude_score.toFixed(0)}%, noise score ${q.noise_score.toFixed(0)}%, coverage ${q.coverage_score.toFixed(0)}%. Overall engineering signal-quality score ${q.score.toFixed(1)}% (${q.classification}).`), 10, 160);
+          doc.text("BP comparison uses the Device BP and calibrated RMS BP values in the uploaded sheet. No new medical calibration or clinical correction is applied by this export.", 10, 166);
+        }
+      }
+      summaryPages(doc, items, kind === "selected" ? "Selected Reading - Final Vitals & PPG Statistics" : "Final Vitals & PPG Statistics");
+      const blob = doc.output("blob");
+      const name = { all: "VinCense_PPG_Waveforms_and_Vitals_Stats.pdf", view: "VinCense_Current_View_Raw_DC_Filtered.pdf", selected: "VinCense_Selected_Reading_" + String(state.selected && state.selected.Timestamp).replace(/[^\w.-]+/g, "_") + ".pdf" }[kind];
+      msgEl.textContent = "PDF ready. Confirm the save prompt to download it.";
+      const res = await saveFile(name, blob, "application/pdf");
+      msgEl.className = "notice good"; msgEl.textContent = `Saved ${name} (${Math.round(blob.size / 1024).toLocaleString("en-US")} KB, ${items.length} reading${items.length === 1 ? "" : "s"}).`;
+      return res;
+    } catch (e) {
+      msgEl.className = "notice warn"; msgEl.textContent = saveError(e);
+    } finally {
+      btn.disabled = false; btn.textContent = label;
+    }
+  }
+
+  // ------------------------------------------------------------ synthetic lab
+  async function runLab() {
+    const btn = $("labBtn"), out = $("labOut");
+    btn.disabled = true;
+    const kinds = [["notch", "Sharp pulse + notch"], ["strong_notch", "Strong second bump"], ["sawtooth", "Device-style sawtooth"]];
+    const levels = [["clean", { noise: 0.01, wander: 0.1, hrv: 0.01 }], ["noisy", { noise: 0.08, wander: 0.4, hrv: 0.03 }]];
+    const hrs = []; for (let h = 40; h <= 180; h += 10) hrs.push(h);
+    const cases = [];
+    let done = 0; const total = kinds.length * levels.length * hrs.length * 2;
+    for (const [k] of kinds) for (const [lv, o] of levels) for (const h of hrs) for (let seed = 0; seed < 2; seed++) {
+      const { samples, trueHr } = P.makeSynthetic(h, k, Object.assign({ seed: seed + h }, o));
+      const a = P.analyzeSamples(samples);
+      cases.push({ k, lv, h, seed, truth: trueHr, est: a.quality.heart_rate, cls: a.quality.classification });
+      if (++done % 6 === 0) { out.innerHTML = `<div class="bar"><i style="width:${(100 * done / total).toFixed(0)}%"></i></div><p class="small muted">Testing… ${done} of ${total}</p>`; await tick(); }
+    }
+    const err = (c) => (c.est == null ? Infinity : Math.abs(c.est - c.truth));
+    const pass = cases.filter((c) => err(c) <= 2.5).length;
+    const finite = cases.filter((c) => isFinite(err(c)));
+    const mae = finite.reduce((t, c) => t + err(c), 0) / finite.length;
+    const worst = Math.max(...finite.map(err));
+    let html = `<div class="notice ${pass === total ? "good" : "warn"}"><strong>${pass} of ${total} test signals measured within 2.5 BPM of the true rate.</strong> Average error ${mae.toFixed(2)} BPM, worst case ${worst.toFixed(2)} BPM.</div>`;
+    html += `<div class="tablewrap"><table><thead><tr><th class="num">True HR</th>${kinds.flatMap(([, n]) => levels.map(([lv]) => `<th>${esc(n)}<br><span class="muted">${lv}</span></th>`)).join("")}</tr></thead><tbody>`;
+    for (const h of hrs) {
+      html += `<tr><td class="num">${h}</td>`;
+      for (const [k] of kinds) for (const [lv] of levels) {
+        const cs = cases.filter((c) => c.k === k && c.lv === lv && c.h === h);
+        const worstErr = Math.max(...cs.map(err));
+        const c0 = cs[0];
+        html += `<td class="num ${worstErr <= 2.5 ? "cell-pass" : "cell-fail"}">${c0.est == null ? "N/A" : c0.est.toFixed(1)} ${worstErr <= 2.5 ? "✓" : "✕"}</td>`;
+      }
+      html += "</tr>";
+    }
+    html += `</tbody></table></div><p class="small muted">Each cell shows the first of two random test signals at that heart rate; the mark reflects both. True rates are counted from the generated beat times.</p>`;
+    out.innerHTML = html;
+    btn.disabled = false;
+  }
+
+  // ------------------------------------------------------------- file input
+  async function handleFile(file) {
+    if (!file) return;
+    const msg = $("loadMsg");
+    msg.className = "notice info"; msg.textContent = `Reading ${file.name}…`;
+    await tick();
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      state.wb = wb;
+      $("fileName").textContent = file.name;
+      const sel = $("sheet");
+      sel.innerHTML = wb.SheetNames.map((s) => `<option>${esc(s)}</option>`).join("");
+      // Prefer the first sheet that looks like PPG data.
+      const pick = wb.SheetNames.find((s) => { const ref = wb.Sheets[s]["!ref"]; if (!ref) return false; const hdr = XLSX.utils.sheet_to_json(wb.Sheets[s], { header: 1, range: 0 })[0] || []; return hdr.some((h) => /PPGValue cycle/i.test(String(h))); });
+      if (pick) sel.value = pick;
+      $("sheetField").hidden = wb.SheetNames.length < 2;
+      loadSheet();
+    } catch (e) {
+      msg.className = "notice bad"; msg.textContent = "This file could not be read as an Excel workbook (.xlsx). " + (e.message || "");
+    }
+  }
+
+  function loadSheet() {
+    const msg = $("loadMsg");
+    const ws = state.wb.Sheets[$("sheet").value];
+    const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+    const rows = cleanRows(json);
+    const hasPPG = rows.some((r) => P.CYCLE_COLUMNS.some((c) => r[c]));
+    if (!hasPPG) {
+      msg.className = "notice bad";
+      msg.textContent = `The sheet "${$("sheet").value}" has ${rows.length} rows but no "PPGValue cycle 1 (0-1500)" … "cycle 5 (6001-7500)" columns. Pick a different sheet or a VinCense export.`;
+      state.rows = []; state.filtered = []; renderTable(); $("count").textContent = 0; setSource("file", "No PPG columns");
+      return;
+    }
+    msg.className = "notice good";
+    msg.textContent = `File loaded: ${rows.length} rows from sheet "${$("sheet").value}".`;
+    setSource("file", `${rows.length} readings loaded`);
+    loadRows(rows);
+    renderReading();
+  }
+
+  function loadDemo() {
+    $("fileName").textContent = "Example data (computer-generated)";
+    $("sheetField").hidden = true;
+    const msg = $("loadMsg");
+    msg.className = "notice info";
+    msg.textContent = "Showing example data: 12 computer-generated PPG signals with a known heart rate in the HeartRate column. Choose your own workbook to analyse real readings.";
+    setSource("demo", "Example data");
+    loadRows(makeDemoRows());
+    renderReading();
+  }
+
+  // ------------------------------------------------------------------ wiring
+  $("file").addEventListener("change", (e) => handleFile(e.target.files[0]));
+  $("fileBtn").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } });
+  $("demoBtn").addEventListener("click", loadDemo);
+  $("sheet").addEventListener("change", loadSheet);
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => handleFile(e.dataTransfer.files[0]));
+  $("fId").addEventListener("change", () => { buildFilters(false); applyFilters(); });
+  $("fName").addEventListener("change", () => { buildFilters(false); applyFilters(); });
+  $("fDate").addEventListener("change", applyFilters);
+  $("readings").tBodies[0].addEventListener("click", (e) => onRowActivate(e.target.closest("tr")));
+  $("readings").tBodies[0].addEventListener("keydown", (e) => {
+    const tr = e.target.closest("tr");
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowActivate(tr); }
+    if (e.key === "ArrowDown" && tr && tr.nextElementSibling) { e.preventDefault(); tr.nextElementSibling.focus(); }
+    if (e.key === "ArrowUp" && tr && tr.previousElementSibling) { e.preventDefault(); tr.previousElementSibling.focus(); }
+  });
+  $("btnAll").addEventListener("click", () => exportPDF("all", $("btnAll"), $("exportMsg")));
+  $("btnView").addEventListener("click", () => exportPDF("view", $("btnView"), $("exportMsg")));
+  $("labBtn").addEventListener("click", runLab);
+
+  const rerender = () => { if (state.selected) renderReading(); };
+  try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender); } catch (e) { /* older browsers */ }
+  new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  window.__ppgApp = { state, loadDemo, handleFile };
+  loadDemo();
+})();
+</script>
+
+</body>
+</html>
